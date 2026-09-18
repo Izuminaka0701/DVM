@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+aiohttp
+locust
+scikit-learn
+pandas
+numpy
+joblib
+streamlit
+psutil
+matplotlib
+xgboost
