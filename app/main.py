@@ -12,7 +12,6 @@ Chạy từ thư mục gốc ddos_demo/:
 """
 import asyncio
 import json
-import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager
@@ -33,9 +32,26 @@ LOG_DIR.mkdir(exist_ok=True)
 METRICS_LOG = LOG_DIR / "metrics.jsonl"
 RAW_LOG = LOG_DIR / "raw_requests.jsonl"
 
-# Lock bảo vệ ghi file — ngăn dòng log bị ghi dở khi có race condition
-_metrics_lock = threading.Lock()
-_raw_lock = threading.Lock()
+# ---- Persistent file handles — tránh open/close mỗi request (Windows NTFS rất chậm) ----
+_raw_fh = None
+_metrics_fh = None
+
+
+def _open_log_files():
+    """Mở file handle persistent cho raw log và metrics log."""
+    global _raw_fh, _metrics_fh
+    _raw_fh = open(RAW_LOG, "a", buffering=1)       # line-buffered
+    _metrics_fh = open(METRICS_LOG, "a", buffering=1)
+
+
+def _close_log_files():
+    """Đóng file handle khi shutdown."""
+    global _raw_fh, _metrics_fh
+    if _raw_fh:
+        _raw_fh.close()
+    if _metrics_fh:
+        _metrics_fh.close()
+
 
 # ---- 3.2 Traffic Collector: buffer request trong bộ nhớ ----
 request_buffer: deque = deque()
@@ -72,20 +88,21 @@ async def feature_extraction_loop():
             "alert_triggered": triggered,
             "top_ip": top_ip,
         }
-        # Atomic write: serialize trước, write 1 lần
+        # Ghi metrics qua file handle persistent (không open/close mỗi lần)
         line = json.dumps(record) + "\n"
-        with _metrics_lock:
-            with open(METRICS_LOG, "a") as f:
-                f.write(line)
+        if _metrics_fh:
+            _metrics_fh.write(line)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: khởi tạo vòng lặp trích xuất đặc trưng
+    # Startup: mở log files + khởi tạo vòng lặp trích xuất đặc trưng
+    _open_log_files()
     task = asyncio.create_task(feature_extraction_loop())
     yield
-    # Shutdown: huỷ vòng lặp
+    # Shutdown: huỷ vòng lặp + đóng file handles
     task.cancel()
+    _close_log_files()
 
 
 app = FastAPI(title="DDoS Demo - Victim Web Server", lifespan=lifespan)
@@ -101,11 +118,10 @@ async def collector_middleware(request: Request, call_next):
     path = request.url.path
     entry = {"ts": ts, "ip": ip, "method": method, "path": path}
     request_buffer.append(entry)
-    # Atomic write cho raw log
-    line = json.dumps(entry) + "\n"
-    with _raw_lock:
-        with open(RAW_LOG, "a") as f:
-            f.write(line)
+    # Ghi raw log qua file handle persistent — KHÔNG open/close mỗi request
+    # (trên Windows NTFS, open/close mỗi request + lock = ~100ms × N users = 2000ms)
+    if _raw_fh:
+        _raw_fh.write(json.dumps(entry) + "\n")
     response = await call_next(request)
     return response
 

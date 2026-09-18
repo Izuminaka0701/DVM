@@ -32,5 +32,9 @@ class InferenceEngine:
             return 1.0 if features["request_rate"] > 50 else 0.0
         vector = [features_to_vector(features)]
         vector_scaled = self.scaler.transform(vector)
-        proba = self.model.predict_proba(vector_scaled)[0][1]
-        return float(proba)
+        proba_matrix = self.model.predict_proba(vector_scaled)
+        # Xử lý an toàn: nếu model chỉ train với 1 class, proba_matrix chỉ có 1 cột
+        if proba_matrix.shape[1] >= 2:
+            return float(proba_matrix[0][1])
+        else:
+            return float(proba_matrix[0][0])

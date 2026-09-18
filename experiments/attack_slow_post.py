@@ -31,7 +31,7 @@ TARGET_PORT = 8000
 TARGET_URL = f"http://{TARGET_HOST}:{TARGET_PORT}"
 
 # --- Slow POST params ---
-NUM_SLOW_SOCKETS = 100
+NUM_SLOW_SOCKETS = 30
 BODY_LEN = 50           # Content-Length nhỏ hơn, để 1 số request hoàn tất
 DRIP_INTERVAL_S = 0.3   # gửi 1 byte mỗi 0.3s (nhanh hơn trước)
 

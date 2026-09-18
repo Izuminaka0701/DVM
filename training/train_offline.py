@@ -97,6 +97,24 @@ def main():
           f"{len(df) - df['label'].sum()} normal")
     print(f"Đặc trưng: {FEATURE_ORDER}")
 
+    # ---- Kiểm tra dataset phải có cả 2 class ----
+    n_classes = df["label"].nunique()
+    n_attack = int(df["label"].sum())
+    n_normal = int(len(df) - n_attack)
+
+    if n_classes < 2:
+        print(f"\n[ERROR] Dataset chỉ có {n_classes} class (attack={n_attack}, normal={n_normal}).")
+        print("Cần cả dữ liệu normal VÀ attack để huấn luyện.")
+        print("Hãy kiểm tra lại:")
+        print("  1. Server có đang chạy khi attack script chạy không?")
+        print("  2. Attack log files có tồn tại trong logs/ không?")
+        print("  3. generate_dataset.py đã chạy cho cả normal lẫn attack?")
+        sys.exit(1)
+
+    if n_attack < 10 or n_normal < 10:
+        print(f"\n[WARNING] Dataset không cân bằng: attack={n_attack}, normal={n_normal}")
+        print("Kết quả có thể không đáng tin cậy. Khuyến nghị: ≥50 mẫu mỗi class.")
+
     X = df[FEATURE_ORDER].values
     y = df["label"].values
 
@@ -142,10 +160,16 @@ def main():
         model.fit(X_train_s, y_train)
         pred = model.predict(X_test_s)
 
-        # Lấy xác suất cho ROC-AUC
+        # Lấy xác suất cho ROC-AUC — xử lý an toàn khi model chỉ biết 1 class
         proba = None
         if hasattr(model, "predict_proba"):
-            proba = model.predict_proba(X_test_s)[:, 1]
+            proba_matrix = model.predict_proba(X_test_s)
+            if proba_matrix.shape[1] >= 2:
+                proba = proba_matrix[:, 1]
+            else:
+                # Model chỉ học được 1 class (data quá lệch)
+                proba = proba_matrix[:, 0]
+                print(f"  [WARNING] {name}: predict_proba chỉ có 1 cột — data có thể quá lệch")
 
         result = evaluate(name, y_test, pred, proba)
 

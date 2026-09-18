@@ -1,0 +1,32 @@
+{
+  "processing_latency": {
+    "n_windows": 155,
+    "mean_ms": 20.996,
+    "median_ms": 20.777,
+    "p95_ms": 32.566,
+    "p99_ms": 52.224,
+    "max_ms": 53.996,
+    "min_ms": 9.719,
+    "std_ms": 6.835
+  },
+  "detection_delay": [
+    {
+      "attack": "get_flood_c200_start",
+      "delay_s": 0.28,
+      "detected": true
+    },
+    {
+      "attack": "bot_mimicry_start",
+      "delay_s": 5.31,
+      "detected": true
+    }
+  ],
+  "resource_usage": {
+    "n_samples": 120,
+    "cpu_mean": 27.28,
+    "cpu_max": 100.0,
+    "cpu_p95": 98.4,
+    "mem_mean_mb": 215.67,
+    "mem_max_mb": 245.91
+  }
+}

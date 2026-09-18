@@ -39,7 +39,10 @@ async def main(concurrency: int, duration_s: int):
         f.write(f"get_flood_c{concurrency}_start\t{start}\n")
 
     stop_at = start + duration_s
-    async with aiohttp.ClientSession() as session:
+    # Giới hạn connection pool để tránh cạn kiệt ephemeral ports trên Windows
+    connector = aiohttp.TCPConnector(limit=min(concurrency, 200), force_close=True)
+    timeout = aiohttp.ClientTimeout(total=5)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         workers = [
             flood_worker(session, stop_at, f"10.0.{random.randint(0, 9)}.{i % 255}")
             for i in range(concurrency)

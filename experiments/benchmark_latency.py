@@ -49,25 +49,53 @@ def find_uvicorn_pid():
 
 
 def monitor_resources(pid: int, duration_s: int):
-    """Đo CPU/RAM theo thời gian và lưu vào CSV."""
+    """Đo CPU/RAM theo thời gian và lưu vào CSV.
+    
+    Đo TOÀN BỘ process tree (parent + children) vì trên Windows, uvicorn
+    parent process chỉ là supervisor (CPU ~0%), work thật xảy ra ở worker child.
+    """
     try:
-        proc = psutil.Process(pid)
+        parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
         print(f"Không tìm thấy process với PID {pid}")
         return
 
-    print(f"Đang đo CPU/RAM của PID {pid} trong {duration_s}s...")
+    print(f"Đang đo CPU/RAM của PID {pid} (+ children) trong {duration_s}s...")
     header_needed = not RESOURCE_LOG.exists() or RESOURCE_LOG.stat().st_size == 0
     with open(RESOURCE_LOG, "a") as f:
         if header_needed:
             f.write("ts,cpu_percent,mem_mb\n")
         for i in range(duration_s):
             try:
-                cpu = proc.cpu_percent(interval=1.0)
-                mem_mb = proc.memory_info().rss / (1024 * 1024)
-                f.write(f"{time.time()},{cpu},{mem_mb:.2f}\n")
+                # Đo tổng hợp parent + tất cả child processes
+                children = parent.children(recursive=True)
+                all_procs = [parent] + children
+
+                total_cpu = 0.0
+                total_mem = 0.0
+                for p in all_procs:
+                    try:
+                        total_cpu += p.cpu_percent(interval=0)
+                        total_mem += p.memory_info().rss
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+
+                # cpu_percent(interval=0) lần đầu luôn trả 0, cần sleep rồi đo lại
+                time.sleep(1.0)
+
+                total_cpu = 0.0
+                for p in all_procs:
+                    try:
+                        total_cpu += p.cpu_percent(interval=0)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+
+                mem_mb = total_mem / (1024 * 1024)
+                f.write(f"{time.time()},{total_cpu},{mem_mb:.2f}\n")
                 if (i + 1) % 10 == 0:
-                    print(f"  [{i+1}/{duration_s}] CPU={cpu:.1f}%, RAM={mem_mb:.1f}MB")
+                    n_children = len(children)
+                    print(f"  [{i+1}/{duration_s}] CPU={total_cpu:.1f}%, "
+                          f"RAM={mem_mb:.1f}MB ({n_children} children)")
             except psutil.NoSuchProcess:
                 print(f"Process {pid} đã kết thúc.")
                 break

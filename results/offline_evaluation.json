@@ -1,0 +1,142 @@
+{
+  "dataset_size": 377,
+  "n_attack": 182,
+  "n_normal": 195,
+  "features": [
+    "request_rate",
+    "ip_entropy",
+    "inter_arrival_mean",
+    "inter_arrival_std",
+    "http_method_ratio",
+    "unique_path_ratio",
+    "unique_ip_count",
+    "post_ratio"
+  ],
+  "train_size": 282,
+  "test_size": 95,
+  "best_model": "RandomForest",
+  "best_f1": 1.0,
+  "results": [
+    {
+      "name": "Baseline - Fixed threshold (request_rate)",
+      "accuracy": 0.6737,
+      "precision": 0.6316,
+      "recall": 0.7826,
+      "f1": 0.699,
+      "roc_auc": null,
+      "confusion_matrix": [
+        [
+          28,
+          21
+        ],
+        [
+          10,
+          36
+        ]
+      ]
+    },
+    {
+      "name": "RandomForest",
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          49,
+          0
+        ],
+        [
+          0,
+          46
+        ]
+      ],
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
+      "cv_f1_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "MLP",
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          49,
+          0
+        ],
+        [
+          0,
+          46
+        ]
+      ],
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
+      "cv_f1_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "XGBoost",
+      "accuracy": 0.9895,
+      "precision": 0.9787,
+      "recall": 1.0,
+      "f1": 0.9892,
+      "roc_auc": 0.9898,
+      "confusion_matrix": [
+        [
+          48,
+          1
+        ],
+        [
+          0,
+          46
+        ]
+      ],
+      "cv_f1_mean": 0.9973,
+      "cv_f1_std": 0.0053,
+      "cv_f1_scores": [
+        1.0,
+        0.9867,
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "feature_importances": {
+    "RandomForest": {
+      "request_rate": 0.07654609953591879,
+      "ip_entropy": 0.10982845845408709,
+      "inter_arrival_mean": 0.06889060486691766,
+      "inter_arrival_std": 0.05730167369923689,
+      "http_method_ratio": 0.11627602373700513,
+      "unique_path_ratio": 0.38296990343718307,
+      "unique_ip_count": 0.07088941503058918,
+      "post_ratio": 0.1172978212390623
+    },
+    "XGBoost": {
+      "request_rate": 0.0,
+      "ip_entropy": 0.0,
+      "inter_arrival_mean": 0.0,
+      "inter_arrival_std": 0.0,
+      "http_method_ratio": 0.0,
+      "unique_path_ratio": 1.0,
+      "unique_ip_count": 0.0,
+      "post_ratio": 0.0
+    }
+  }
+}

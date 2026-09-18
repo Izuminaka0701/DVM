@@ -49,18 +49,25 @@ def run(cmd, cwd=None, timeout=None, desc=""):
 def start_server():
     """Khởi động uvicorn server nền."""
     print("\n  Khởi động uvicorn server...")
+    # QUAN TRỌNG: KHÔNG dùng stdout=PIPE/stderr=PIPE vì trên Windows,
+    # khi pipe buffer (~64KB) đầy mà parent không đọc, child process bị block
+    # hoàn toàn → response time tăng từ <10ms lên 2200ms.
+    # Redirect ra file log hoặc DEVNULL để server chạy bình thường.
+    server_log = LOG_DIR / "server_output.log"
+    server_log_fh = open(server_log, "w")
     proc = subprocess.Popen(
         [PYTHON, "-m", "uvicorn", "app.main:app", "--port", "8000"],
         cwd=str(PROJECT_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=server_log_fh,
+        stderr=subprocess.STDOUT,
     )
-    time.sleep(3)  # đợi server khởi động
+    # Lưu file handle để đóng sau
+    proc._log_fh = server_log_fh  # type: ignore[attr-defined]
+    time.sleep(4)  # đợi server khởi động
     if proc.poll() is not None:
         print("  [ERROR] Server không khởi động được!")
-        out, err = proc.communicate()
-        print(f"  STDOUT: {out.decode()[-500:]}")
-        print(f"  STDERR: {err.decode()[-500:]}")
+        server_log_fh.close()
+        print(f"  Log: {server_log.read_text()[-500:]}")
         return None
     print(f"  Server đang chạy (PID={proc.pid})")
     return proc
@@ -75,6 +82,12 @@ def stop_server(proc):
         except subprocess.TimeoutExpired:
             proc.kill()
         print("  Server đã dừng.")
+    # Đóng file handle log nếu có
+    if proc and hasattr(proc, '_log_fh'):
+        try:
+            proc._log_fh.close()
+        except Exception:
+            pass
 
 
 def clean_logs():
@@ -94,12 +107,15 @@ def clean_data():
 
 
 def rename_raw_log(new_name):
-    """Đổi tên raw_requests.jsonl → tên mới."""
+    """Đổi tên raw_requests.jsonl → tên mới.
+    
+    QUAN TRỌNG: Server phải đã DỪNG trước khi gọi hàm này,
+    vì app/main.py giữ file handle persistent trên raw_requests.jsonl.
+    """
     raw = LOG_DIR / "raw_requests.jsonl"
     target = LOG_DIR / new_name
     if raw.exists():
-        shutil.copy(raw, target)
-        raw.unlink()
+        shutil.move(str(raw), str(target))  # move thay vì copy+unlink
         count = sum(1 for line in open(target) if line.strip())
         print(f"  → {target.name}: {count} requests")
         return count
@@ -129,9 +145,10 @@ def phase_1_collect_data():
         timeout=150, desc="Locust normal")
 
     time.sleep(3)
-    rename_raw_log("raw_requests_normal.jsonl")
+    # QUAN TRỌNG: Dừng server TRƯỚC khi rename để giải phóng file handle
     stop_server(server)
     time.sleep(2)
+    rename_raw_log("raw_requests_normal.jsonl")
 
     # --- 1B: Burst traffic (90s) ---
     print("\n--- 1B: Traffic burst hợp lệ (90s, 150 users) ---")
@@ -145,12 +162,13 @@ def phase_1_collect_data():
          "--host=http://localhost:8000",
          "-u", "150", "-r", "30",
          "--run-time", "90s", "--headless"],
-        timeout=120, desc="Locust burst")
+        timeout=150, desc="Locust burst")
 
     time.sleep(3)
-    rename_raw_log("raw_requests_burst.jsonl")
+    # QUAN TRỌNG: Dừng server TRƯỚC khi rename
     stop_server(server)
     time.sleep(2)
+    rename_raw_log("raw_requests_burst.jsonl")
 
     # --- 1C: Attack suite ---
     print("\n--- 1C: Attack suite (5 kịch bản) ---")
@@ -160,7 +178,7 @@ def phase_1_collect_data():
     time.sleep(5)
 
     run([PYTHON, str(EXP_DIR / "run_attack_suite.py")],
-        timeout=600, desc="Attack suite")
+        timeout=900, desc="Attack suite")
 
     time.sleep(3)
     stop_server(server)
