@@ -143,12 +143,17 @@ def summarize_latency():
     }
 
     # --- Chi tiết theo mốc T1-T6 ---
+    log_lats = [r["log_write_latency_ms"] for r in rows
+                if r.get("log_write_latency_ms") is not None]
     feat_lats = [r["feature_extraction_latency_ms"] for r in rows if "feature_extraction_latency_ms" in r]
     infer_lats = [r["inference_latency_ms"] for r in rows if "inference_latency_ms" in r]
     alert_lats = [r["alert_latency_ms"] for r in rows if "alert_latency_ms" in r]
     e2e_delays = [r["e2e_detection_delay_s"] for r in rows
                   if r.get("e2e_detection_delay_s") is not None]
 
+    if log_lats:
+        result["log_write_mean_ms"] = round(statistics.mean(log_lats), 4)
+        result["log_write_p95_ms"] = round(sorted(log_lats)[int(len(log_lats) * 0.95)], 4)
     if feat_lats:
         result["feature_extraction_mean_ms"] = round(statistics.mean(feat_lats), 4)
         result["feature_extraction_p95_ms"] = round(sorted(feat_lats)[int(len(feat_lats) * 0.95)], 4)
@@ -165,6 +170,8 @@ def summarize_latency():
     print("\n--- 4.3.1 Processing latency (ms/window) ---")
     print(f"  N windows: {result['n_windows']}")
     print(f"  [Tổng T3→T6] Mean : {result['mean_ms']} ms | P95: {result['p95_ms']} ms | Max: {result['max_ms']} ms")
+    if log_lats:
+        print(f"  [T1→T2 Log Write]         Mean: {result['log_write_mean_ms']} ms | P95: {result['log_write_p95_ms']} ms")
     if feat_lats:
         print(f"  [T3→T4 Feature Extraction] Mean: {result['feature_extraction_mean_ms']} ms | P95: {result['feature_extraction_p95_ms']} ms")
     if infer_lats:
@@ -302,24 +309,35 @@ def generate_report():
         ])
 
         # Chi tiết từng giai đoạn T1-T6
-        if "feature_extraction_mean_ms" in latency:
+        has_detail = any(k in latency for k in [
+            "log_write_mean_ms", "feature_extraction_mean_ms",
+            "inference_mean_ms", "alert_mean_ms"
+        ])
+        if has_detail:
             md_lines.extend([
                 "### Chi tiết theo mốc thời gian T1-T6\n",
-                "| Giai đoạn | Mean | P95 |",
-                "|-----------|------|-----|",
-                f"| T3→T4 Feature Extraction | {latency['feature_extraction_mean_ms']} ms | {latency['feature_extraction_p95_ms']} ms |",
+                "| Giai đoạn | Ý nghĩa | Mean | P95 |",
+                "|-----------|--------|------|-----|",
             ])
+            if "log_write_mean_ms" in latency:
+                md_lines.append(
+                    f"| T1→T2 | Ghi log raw request | {latency['log_write_mean_ms']} ms | {latency['log_write_p95_ms']} ms |"
+                )
+            if "feature_extraction_mean_ms" in latency:
+                md_lines.append(
+                    f"| T3→T4 | Feature Extraction | {latency['feature_extraction_mean_ms']} ms | {latency['feature_extraction_p95_ms']} ms |"
+                )
             if "inference_mean_ms" in latency:
                 md_lines.append(
-                    f"| T4→T5 ML Inference | {latency['inference_mean_ms']} ms | {latency['inference_p95_ms']} ms |"
+                    f"| T4→T5 | ML Inference | {latency['inference_mean_ms']} ms | {latency['inference_p95_ms']} ms |"
                 )
             if "alert_mean_ms" in latency:
                 md_lines.append(
-                    f"| T5→T6 Alert | {latency['alert_mean_ms']} ms | {latency['alert_p95_ms']} ms |"
+                    f"| T5→T6 | Alert | {latency['alert_mean_ms']} ms | {latency['alert_p95_ms']} ms |"
                 )
             if "e2e_delay_mean_s" in latency:
                 md_lines.append(
-                    f"| T1→T6 End-to-End | {latency['e2e_delay_mean_s']} s | {latency['e2e_delay_max_s']} s (max) |"
+                    f"| T1→T6 | End-to-End | {latency['e2e_delay_mean_s']} s | {latency['e2e_delay_max_s']} s (max) |"
                 )
             md_lines.append("")
 

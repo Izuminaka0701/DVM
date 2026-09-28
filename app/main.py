@@ -94,11 +94,13 @@ async def feature_extraction_loop():
 
         # ---- T4: Feature extraction hoàn tất ----
         t4 = time.perf_counter()
+        t4_wall = time.time()
 
         prob = engine.predict_proba(features)  # 3.4.2 online inference
 
         # ---- T5: ML inference hoàn tất ----
         t5 = time.perf_counter()
+        t5_wall = time.time()
 
         triggered, top_ip = alerter.check(prob, window_requests)  # 3.5
 
@@ -113,26 +115,39 @@ async def feature_extraction_loop():
         processing_latency_ms = (t6 - t3) * 1000            # T6 - T3 (tổng processing)
 
         # T1: lấy từ request sớm nhất trong window (nếu có)
+        # T2: lấy từ request sớm nhất có T2_logged (log timestamp)
         # End-to-End Detection Delay = T6 - T1
         earliest_t1 = None
+        earliest_t2 = None
+        log_write_latency_ms = None
         e2e_detection_delay_s = None
         if window_requests:
             earliest_t1 = min(r["ts"] for r in window_requests)
             e2e_detection_delay_s = round(t6_wall - earliest_t1, 4)
+            # T2: timestamp ghi log tương ứng với request sớm nhất
+            t2_values = [r["T2_logged"] for r in window_requests if "T2_logged" in r]
+            if t2_values:
+                earliest_t2 = min(t2_values)
+                log_write_latency_ms = round((earliest_t2 - earliest_t1) * 1000, 4)
 
         record = {
             "ts": now,
             **features,
             "attack_probability": prob,
-            # --- Mốc thời gian chi tiết (Chương 4) ---
-            "T3_window_ready": t3_wall,
-            "T6_alert_done": t6_wall,
+            # --- 6 mốc thời gian tuyệt đối (Chương 4) ---
             "T1_earliest_request": earliest_t1,
-            "feature_extraction_latency_ms": round(feature_extraction_latency_ms, 4),
-            "inference_latency_ms": round(inference_latency_ms, 4),
-            "alert_latency_ms": round(alert_latency_ms, 4),
-            "processing_latency_ms": round(processing_latency_ms, 4),
-            "e2e_detection_delay_s": e2e_detection_delay_s,
+            "T2_log_written": earliest_t2,
+            "T3_window_ready": t3_wall,
+            "T4_feature_done": t4_wall,
+            "T5_inference_done": t5_wall,
+            "T6_alert_done": t6_wall,
+            # --- Latency giữa các mốc (ms) ---
+            "log_write_latency_ms": log_write_latency_ms,               # T2 - T1
+            "feature_extraction_latency_ms": round(feature_extraction_latency_ms, 4),  # T4 - T3
+            "inference_latency_ms": round(inference_latency_ms, 4),     # T5 - T4
+            "alert_latency_ms": round(alert_latency_ms, 4),             # T6 - T5
+            "processing_latency_ms": round(processing_latency_ms, 4),   # T6 - T3
+            "e2e_detection_delay_s": e2e_detection_delay_s,             # T6 - T1
             "alert_triggered": triggered,
             "top_ip": top_ip,
         }
@@ -172,6 +187,8 @@ async def collector_middleware(request: Request, call_next):
     if _raw_fh:
         _raw_fh.write(json.dumps(entry) + "\n")
     # ---- T2: Log được ghi nhận ----
+    t2 = time.time()
+    entry["T2_logged"] = t2
     response = await call_next(request)
     return response
 
