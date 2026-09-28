@@ -158,6 +158,34 @@ Kết quả:
 | 7 | `unique_ip_count` | Số IP phân biệt (bot dùng ít IP) |
 | 8 | `post_ratio` | Tỉ lệ POST/tổng (phát hiện slow POST) |
 
+## Các mốc thời gian T1-T6 (Chương 4 - Đánh giá hiệu năng)
+
+Pipeline phát hiện DDoS được đo tại 6 mốc thời gian:
+
+```
+T1: Request được Web Server tiếp nhận           (app/main.py - middleware)
+↓
+T2: Log được ghi nhận                            (app/main.py - raw_fh.write)
+↓
+T3: Window hoàn tất                              (app/main.py - feature_extraction_loop)
+↓
+T4: Feature extraction hoàn tất                  (common/features.py - extract_features)
+↓
+T5: ML inference hoàn tất                        (app/inference.py - predict_proba)
+↓
+T6: Alert được sinh ra                           (app/alert.py - check)
+```
+
+Từ đó Chương 4 có thể đo:
+
+- **Feature Extraction Latency** = T4 – T3
+- **Inference Latency** = T5 – T4
+- **End-to-End Detection Delay** = T6 – T1 hoặc theo định nghĩa thống nhất của nhóm
+- **Processing overhead** của collector/inference đối với Web Server = T6 – T3
+
+Các mốc thời gian được ghi tự động vào `logs/metrics.jsonl` mỗi chu kỳ cửa sổ trượt.
+Chạy `python experiments/benchmark_latency.py --report` để xem báo cáo chi tiết.
+
 ## Hạn chế (4.5)
 
 - **Slowloris** không bắt được ở tầng ứng dụng (header chưa hoàn tất → không ghi log)

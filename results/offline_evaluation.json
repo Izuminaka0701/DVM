@@ -1,7 +1,7 @@
 {
-  "dataset_size": 377,
+  "dataset_size": 796439,
   "n_attack": 182,
-  "n_normal": 195,
+  "n_normal": 796257,
   "features": [
     "request_rate",
     "ip_entropy",
@@ -12,26 +12,26 @@
     "unique_ip_count",
     "post_ratio"
   ],
-  "train_size": 282,
-  "test_size": 95,
+  "train_size": 597329,
+  "test_size": 199110,
   "best_model": "RandomForest",
-  "best_f1": 1.0,
+  "best_f1": 0.9663,
   "results": [
     {
       "name": "Baseline - Fixed threshold (request_rate)",
-      "accuracy": 0.6737,
-      "precision": 0.6316,
-      "recall": 0.7826,
-      "f1": 0.699,
+      "accuracy": 0.9996,
+      "precision": 0.3158,
+      "recall": 0.6522,
+      "f1": 0.4255,
       "roc_auc": null,
       "confusion_matrix": [
         [
-          28,
-          21
+          198999,
+          65
         ],
         [
-          10,
-          36
+          16,
+          30
         ]
       ]
     },
@@ -39,94 +39,94 @@
       "name": "RandomForest",
       "accuracy": 1.0,
       "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0,
+      "recall": 0.9348,
+      "f1": 0.9663,
       "roc_auc": 1.0,
       "confusion_matrix": [
         [
-          49,
+          199064,
           0
         ],
         [
-          0,
-          46
+          3,
+          43
         ]
       ],
-      "cv_f1_mean": 1.0,
-      "cv_f1_std": 0.0,
+      "cv_f1_mean": 0.9415,
+      "cv_f1_std": 0.0256,
       "cv_f1_scores": [
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
+        0.9167,
+        0.9444,
+        0.9167,
+        0.9867,
+        0.9429
       ]
     },
     {
       "name": "MLP",
-      "accuracy": 1.0,
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0,
-      "roc_auc": 1.0,
+      "accuracy": 0.9998,
+      "precision": 0.6042,
+      "recall": 0.6304,
+      "f1": 0.617,
+      "roc_auc": 0.9999,
       "confusion_matrix": [
         [
-          49,
-          0
+          199045,
+          19
         ],
         [
-          0,
-          46
+          17,
+          29
         ]
       ],
-      "cv_f1_mean": 1.0,
-      "cv_f1_std": 0.0,
+      "cv_f1_mean": 0.3474,
+      "cv_f1_std": 0.1264,
       "cv_f1_scores": [
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
+        0.4872,
+        0.4151,
+        0.1951,
+        0.1951,
+        0.4444
       ]
     },
     {
       "name": "XGBoost",
-      "accuracy": 0.9895,
-      "precision": 0.9787,
-      "recall": 1.0,
-      "f1": 0.9892,
-      "roc_auc": 0.9898,
+      "accuracy": 0.9998,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.5,
       "confusion_matrix": [
         [
-          48,
-          1
+          199064,
+          0
         ],
         [
-          0,
-          46
+          46,
+          0
         ]
       ],
-      "cv_f1_mean": 0.9973,
-      "cv_f1_std": 0.0053,
+      "cv_f1_mean": 0.0,
+      "cv_f1_std": 0.0,
       "cv_f1_scores": [
-        1.0,
-        0.9867,
-        1.0,
-        1.0,
-        1.0
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
       ]
     }
   ],
   "feature_importances": {
     "RandomForest": {
-      "request_rate": 0.07654609953591879,
-      "ip_entropy": 0.10982845845408709,
-      "inter_arrival_mean": 0.06889060486691766,
-      "inter_arrival_std": 0.05730167369923689,
-      "http_method_ratio": 0.11627602373700513,
-      "unique_path_ratio": 0.38296990343718307,
-      "unique_ip_count": 0.07088941503058918,
-      "post_ratio": 0.1172978212390623
+      "request_rate": 0.1766947689321539,
+      "ip_entropy": 0.2025721908775386,
+      "inter_arrival_mean": 0.22928284262037563,
+      "inter_arrival_std": 0.12460030155858653,
+      "http_method_ratio": 0.01988455356904585,
+      "unique_path_ratio": 0.16987164013617648,
+      "unique_ip_count": 0.06320093614879392,
+      "post_ratio": 0.013892766157328982
     },
     "XGBoost": {
       "request_rate": 0.0,
@@ -134,7 +134,7 @@
       "inter_arrival_mean": 0.0,
       "inter_arrival_std": 0.0,
       "http_method_ratio": 0.0,
-      "unique_path_ratio": 1.0,
+      "unique_path_ratio": 0.0,
       "unique_ip_count": 0.0,
       "post_ratio": 0.0
     }

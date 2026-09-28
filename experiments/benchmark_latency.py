@@ -119,7 +119,7 @@ def load_metrics_safe():
 
 
 def summarize_latency():
-    """4.3.1 Processing Latency (ms/window)."""
+    """4.3.1 Processing Latency (ms/window) — chi tiết theo các mốc T1-T6."""
     rows = load_metrics_safe()
     if not rows:
         print("Chưa có metrics.jsonl - hãy chạy app/main.py trước.")
@@ -142,14 +142,37 @@ def summarize_latency():
         "std_ms": round(statistics.stdev(latencies), 3) if n > 1 else 0,
     }
 
+    # --- Chi tiết theo mốc T1-T6 ---
+    feat_lats = [r["feature_extraction_latency_ms"] for r in rows if "feature_extraction_latency_ms" in r]
+    infer_lats = [r["inference_latency_ms"] for r in rows if "inference_latency_ms" in r]
+    alert_lats = [r["alert_latency_ms"] for r in rows if "alert_latency_ms" in r]
+    e2e_delays = [r["e2e_detection_delay_s"] for r in rows
+                  if r.get("e2e_detection_delay_s") is not None]
+
+    if feat_lats:
+        result["feature_extraction_mean_ms"] = round(statistics.mean(feat_lats), 4)
+        result["feature_extraction_p95_ms"] = round(sorted(feat_lats)[int(len(feat_lats) * 0.95)], 4)
+    if infer_lats:
+        result["inference_mean_ms"] = round(statistics.mean(infer_lats), 4)
+        result["inference_p95_ms"] = round(sorted(infer_lats)[int(len(infer_lats) * 0.95)], 4)
+    if alert_lats:
+        result["alert_mean_ms"] = round(statistics.mean(alert_lats), 4)
+        result["alert_p95_ms"] = round(sorted(alert_lats)[int(len(alert_lats) * 0.95)], 4)
+    if e2e_delays:
+        result["e2e_delay_mean_s"] = round(statistics.mean(e2e_delays), 4)
+        result["e2e_delay_max_s"] = round(max(e2e_delays), 4)
+
     print("\n--- 4.3.1 Processing latency (ms/window) ---")
     print(f"  N windows: {result['n_windows']}")
-    print(f"  Mean : {result['mean_ms']} ms")
-    print(f"  P50  : {result['median_ms']} ms")
-    print(f"  P95  : {result['p95_ms']} ms")
-    print(f"  P99  : {result['p99_ms']} ms")
-    print(f"  Max  : {result['max_ms']} ms")
-    print(f"  Std  : {result['std_ms']} ms")
+    print(f"  [Tổng T3→T6] Mean : {result['mean_ms']} ms | P95: {result['p95_ms']} ms | Max: {result['max_ms']} ms")
+    if feat_lats:
+        print(f"  [T3→T4 Feature Extraction] Mean: {result['feature_extraction_mean_ms']} ms | P95: {result['feature_extraction_p95_ms']} ms")
+    if infer_lats:
+        print(f"  [T4→T5 ML Inference]       Mean: {result['inference_mean_ms']} ms | P95: {result['inference_p95_ms']} ms")
+    if alert_lats:
+        print(f"  [T5→T6 Alert]              Mean: {result['alert_mean_ms']} ms | P95: {result['alert_p95_ms']} ms")
+    if e2e_delays:
+        print(f"  [T1→T6 End-to-End Delay]   Mean: {result['e2e_delay_mean_s']} s | Max: {result['e2e_delay_max_s']} s")
     return result
 
 
@@ -267,6 +290,7 @@ def generate_report():
     ]
     if latency:
         md_lines.extend([
+            "### Tổng Processing (T3→T6)\n",
             "| Metric | Value |",
             "|--------|-------|",
             f"| Mean | {latency['mean_ms']} ms |",
@@ -276,6 +300,28 @@ def generate_report():
             f"| Max | {latency['max_ms']} ms |",
             "",
         ])
+
+        # Chi tiết từng giai đoạn T1-T6
+        if "feature_extraction_mean_ms" in latency:
+            md_lines.extend([
+                "### Chi tiết theo mốc thời gian T1-T6\n",
+                "| Giai đoạn | Mean | P95 |",
+                "|-----------|------|-----|",
+                f"| T3→T4 Feature Extraction | {latency['feature_extraction_mean_ms']} ms | {latency['feature_extraction_p95_ms']} ms |",
+            ])
+            if "inference_mean_ms" in latency:
+                md_lines.append(
+                    f"| T4→T5 ML Inference | {latency['inference_mean_ms']} ms | {latency['inference_p95_ms']} ms |"
+                )
+            if "alert_mean_ms" in latency:
+                md_lines.append(
+                    f"| T5→T6 Alert | {latency['alert_mean_ms']} ms | {latency['alert_p95_ms']} ms |"
+                )
+            if "e2e_delay_mean_s" in latency:
+                md_lines.append(
+                    f"| T1→T6 End-to-End | {latency['e2e_delay_mean_s']} s | {latency['e2e_delay_max_s']} s (max) |"
+                )
+            md_lines.append("")
 
     md_lines.append("## 4.3.2 Detection Delay\n")
     if delays:

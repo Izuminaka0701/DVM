@@ -7,6 +7,19 @@ từng module riêng để mô tả đúng kiến trúc 5 module ở Chương 3)
   - ML Inference (3.4.2): gọi model đã train offline để suy luận
   - Alert (3.5): kiểm tra ngưỡng + debounce + "chặn" IP
 
+Các mốc thời gian (Chương 4 - Đánh giá hiệu năng):
+  T1: Request được Web Server tiếp nhận
+  T2: Log được ghi nhận
+  T3: Window hoàn tất (cửa sổ trượt sẵn sàng)
+  T4: Feature extraction hoàn tất
+  T5: ML inference hoàn tất
+  T6: Alert được sinh ra
+
+  => Feature Extraction Latency  = T4 – T3
+  => Inference Latency           = T5 – T4
+  => End-to-End Detection Delay  = T6 – T1
+  => Processing Overhead         = T6 – T3 (collector/inference đối với Web Server)
+
 Chạy từ thư mục gốc ddos_demo/:
     uvicorn app.main:app --reload --port 8000
 """
@@ -73,18 +86,53 @@ async def feature_extraction_loop():
 
         window_requests = list(request_buffer)
 
-        t0 = time.perf_counter()
+        # ---- T3: Window hoàn tất ----
+        t3 = time.perf_counter()
+        t3_wall = time.time()
+
         features = extract_features(window_requests, WINDOW_SECONDS)
+
+        # ---- T4: Feature extraction hoàn tất ----
+        t4 = time.perf_counter()
+
         prob = engine.predict_proba(features)  # 3.4.2 online inference
-        processing_latency_ms = (time.perf_counter() - t0) * 1000
+
+        # ---- T5: ML inference hoàn tất ----
+        t5 = time.perf_counter()
 
         triggered, top_ip = alerter.check(prob, window_requests)  # 3.5
+
+        # ---- T6: Alert được sinh ra ----
+        t6 = time.perf_counter()
+        t6_wall = time.time()
+
+        # Tính latency chi tiết theo các mốc T1-T6
+        feature_extraction_latency_ms = (t4 - t3) * 1000   # T4 - T3
+        inference_latency_ms = (t5 - t4) * 1000             # T5 - T4
+        alert_latency_ms = (t6 - t5) * 1000                 # T6 - T5
+        processing_latency_ms = (t6 - t3) * 1000            # T6 - T3 (tổng processing)
+
+        # T1: lấy từ request sớm nhất trong window (nếu có)
+        # End-to-End Detection Delay = T6 - T1
+        earliest_t1 = None
+        e2e_detection_delay_s = None
+        if window_requests:
+            earliest_t1 = min(r["ts"] for r in window_requests)
+            e2e_detection_delay_s = round(t6_wall - earliest_t1, 4)
 
         record = {
             "ts": now,
             **features,
             "attack_probability": prob,
-            "processing_latency_ms": processing_latency_ms,
+            # --- Mốc thời gian chi tiết (Chương 4) ---
+            "T3_window_ready": t3_wall,
+            "T6_alert_done": t6_wall,
+            "T1_earliest_request": earliest_t1,
+            "feature_extraction_latency_ms": round(feature_extraction_latency_ms, 4),
+            "inference_latency_ms": round(inference_latency_ms, 4),
+            "alert_latency_ms": round(alert_latency_ms, 4),
+            "processing_latency_ms": round(processing_latency_ms, 4),
+            "e2e_detection_delay_s": e2e_detection_delay_s,
             "alert_triggered": triggered,
             "top_ip": top_ip,
         }
@@ -110,18 +158,20 @@ app = FastAPI(title="DDoS Demo - Victim Web Server", lifespan=lifespan)
 
 @app.middleware("http")
 async def collector_middleware(request: Request, call_next):
-    ts = time.time()
+    # ---- T1: Request được Web Server tiếp nhận ----
+    t1 = time.time()
     # Đọc IP từ X-Forwarded-For nếu có (để attack_http_flood.py có thể giả lập
     # nhiều IP nguồn khác nhau khi demo trên 1 máy), fallback về socket IP thật.
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
     method = request.method
     path = request.url.path
-    entry = {"ts": ts, "ip": ip, "method": method, "path": path}
+    entry = {"ts": t1, "ip": ip, "method": method, "path": path}
     request_buffer.append(entry)
     # Ghi raw log qua file handle persistent — KHÔNG open/close mỗi request
     # (trên Windows NTFS, open/close mỗi request + lock = ~100ms × N users = 2000ms)
     if _raw_fh:
         _raw_fh.write(json.dumps(entry) + "\n")
+    # ---- T2: Log được ghi nhận ----
     response = await call_next(request)
     return response
 
