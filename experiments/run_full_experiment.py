@@ -17,6 +17,7 @@ Chạy: python experiments/run_full_experiment.py
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -27,6 +28,32 @@ LOG_DIR = PROJECT_DIR / "logs"
 DATA_DIR = PROJECT_DIR / "data"
 EXP_DIR = PROJECT_DIR / "experiments"
 PYTHON = sys.executable
+
+
+def wait_for_port(port: int, host: str = "127.0.0.1", timeout: int = 15) -> bool:
+    """Đợi đến khi port bắt đầu lắng nghe (server sẵn sàng)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
+def wait_for_port_free(port: int, host: str = "127.0.0.1", timeout: int = 15) -> bool:
+    """Đợi đến khi port được giải phóng (không ai lắng nghe)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                # Vẫn có process lắng nghe → đợi tiếp
+                time.sleep(0.5)
+        except OSError:
+            # Không kết nối được → port đã free
+            return True
+    return False
 
 
 def run(cmd, cwd=None, timeout=None, desc=""):
@@ -49,6 +76,12 @@ def run(cmd, cwd=None, timeout=None, desc=""):
 def start_server():
     """Khởi động uvicorn server nền."""
     print("\n  Khởi động uvicorn server...")
+
+    # Đảm bảo port 8000 đã được giải phóng trước khi start
+    if not wait_for_port_free(8000, timeout=15):
+        print("  [ERROR] Port 8000 vẫn bị chiếm sau 15s!")
+        return None
+
     # QUAN TRỌNG: KHÔNG dùng stdout=PIPE/stderr=PIPE vì trên Windows,
     # khi pipe buffer (~64KB) đầy mà parent không đọc, child process bị block
     # hoàn toàn → response time tăng từ <10ms lên 2200ms.
@@ -63,7 +96,18 @@ def start_server():
     )
     # Lưu file handle để đóng sau
     proc._log_fh = server_log_fh  # type: ignore[attr-defined]
-    time.sleep(4)  # đợi server khởi động
+
+    # Đợi server thực sự lắng nghe trên port 8000 (thay vì sleep cố định)
+    if not wait_for_port(8000, timeout=15):
+        print("  [ERROR] Server không lắng nghe port 8000 sau 15s!")
+        if proc.poll() is not None:
+            server_log_fh.close()
+            print(f"  Log: {server_log.read_text()[-500:]}")
+        else:
+            proc.kill()
+            server_log_fh.close()
+        return None
+
     if proc.poll() is not None:
         print("  [ERROR] Server không khởi động được!")
         server_log_fh.close()
@@ -74,13 +118,31 @@ def start_server():
 
 
 def stop_server(proc):
-    """Dừng server."""
+    """Dừng server + tất cả child processes, đợi port 8000 được giải phóng."""
     if proc and proc.poll() is None:
-        proc.terminate()
+        # Trên Windows, uvicorn có thể spawn child worker processes.
+        # terminate() chỉ kill parent → child vẫn giữ port.
+        # Dùng psutil để kill toàn bộ process tree.
         try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            import psutil
+            parent = psutil.Process(proc.pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            parent.terminate()
+            gone, alive = psutil.wait_procs([parent] + children, timeout=5)
+            for p in alive:
+                p.kill()
+        except Exception:
+            # Fallback nếu psutil fail
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
         print("  Server đã dừng.")
     # Đóng file handle log nếu có
     if proc and hasattr(proc, '_log_fh'):
@@ -88,6 +150,9 @@ def stop_server(proc):
             proc._log_fh.close()
         except Exception:
             pass
+    # Đợi port 8000 thật sự được giải phóng trước khi tiếp tục
+    if not wait_for_port_free(8000, timeout=10):
+        print("  ⚠️  Port 8000 vẫn bị chiếm sau khi stop!")
 
 
 def clean_logs():
@@ -147,7 +212,6 @@ def phase_1_collect_data():
     time.sleep(3)
     # QUAN TRỌNG: Dừng server TRƯỚC khi rename để giải phóng file handle
     stop_server(server)
-    time.sleep(2)
     rename_raw_log("raw_requests_normal.jsonl")
 
     # --- 1B: Burst traffic (90s) ---
@@ -167,7 +231,6 @@ def phase_1_collect_data():
     time.sleep(3)
     # QUAN TRỌNG: Dừng server TRƯỚC khi rename
     stop_server(server)
-    time.sleep(2)
     rename_raw_log("raw_requests_burst.jsonl")
 
     # --- 1C: Attack suite ---
@@ -273,7 +336,6 @@ def phase_3_realtime_test():
         monitor_proc.terminate()
 
     stop_server(server)
-    time.sleep(2)
 
     # Generate report
     print("\n--- Tổng hợp báo cáo ---")
