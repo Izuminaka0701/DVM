@@ -15,6 +15,7 @@ YÊU CẦU:
 Chạy: python experiments/run_full_experiment.py
 """
 import os
+import importlib.util
 import shutil
 import signal
 import socket
@@ -28,6 +29,9 @@ LOG_DIR = PROJECT_DIR / "logs"
 DATA_DIR = PROJECT_DIR / "data"
 EXP_DIR = PROJECT_DIR / "experiments"
 PYTHON = sys.executable
+SERVER_HOST = "127.0.0.1"
+SERVER_PORT = 8000
+SERVER_START_TIMEOUT = 60
 
 
 def wait_for_port(port: int, host: str = "127.0.0.1", timeout: int = 15) -> bool:
@@ -56,6 +60,36 @@ def wait_for_port_free(port: int, host: str = "127.0.0.1", timeout: int = 15) ->
     return False
 
 
+def wait_for_server(proc, port: int, host: str, timeout: int):
+    """Đợi đúng process uvicorn mở port; dừng sớm nếu process đã crash."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        returncode = proc.poll()
+        if returncode is not None:
+            return False, f"uvicorn đã thoát với mã {returncode}"
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True, ""
+        except OSError:
+            time.sleep(0.5)
+    return False, f"quá thời gian chờ {timeout}s"
+
+
+def server_log_tail(path: Path, max_chars: int = 4000) -> str:
+    """Đọc phần cuối log để lỗi import/bind port luôn xuất hiện trên console."""
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError as exc:
+        return f"Không đọc được server log: {exc}"
+    return content[-max_chars:] if content else "(server_output.log rỗng)"
+
+
+def missing_server_dependencies():
+    """Kiểm tra các package tối thiểu trước khi tạo subprocess uvicorn."""
+    required = ("uvicorn", "fastapi", "joblib", "sklearn")
+    return [name for name in required if importlib.util.find_spec(name) is None]
+
+
 def run(cmd, cwd=None, timeout=None, desc=""):
     """Chạy lệnh và in output."""
     print(f"\n  $ {' '.join(cmd)}")
@@ -77,9 +111,18 @@ def start_server():
     """Khởi động uvicorn server nền."""
     print("\n  Khởi động uvicorn server...")
 
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    missing = missing_server_dependencies()
+    if missing:
+        print(f"  [ERROR] Python đang chạy thiếu package: {', '.join(missing)}")
+        print(f"  Python hiện tại: {PYTHON}")
+        print(f"  Cài bằng: \"{PYTHON}\" -m pip install -r requirements.txt")
+        return None
+
     # Đảm bảo port 8000 đã được giải phóng trước khi start
-    if not wait_for_port_free(8000, timeout=15):
-        print("  [ERROR] Port 8000 vẫn bị chiếm sau 15s!")
+    if not wait_for_port_free(SERVER_PORT, SERVER_HOST, timeout=30):
+        print(f"  [ERROR] Port {SERVER_PORT} vẫn bị chiếm sau 30s!")
+        print(f"  Kiểm tra trên Windows: netstat -ano | findstr :{SERVER_PORT}")
         return None
 
     # QUAN TRỌNG: KHÔNG dùng stdout=PIPE/stderr=PIPE vì trên Windows,
@@ -87,31 +130,35 @@ def start_server():
     # hoàn toàn → response time tăng từ <10ms lên 2200ms.
     # Redirect ra file log hoặc DEVNULL để server chạy bình thường.
     server_log = LOG_DIR / "server_output.log"
-    server_log_fh = open(server_log, "w")
+    server_log_fh = open(server_log, "w", encoding="utf-8", buffering=1)
+    child_env = os.environ.copy()
+    child_env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen(
-        [PYTHON, "-m", "uvicorn", "app.main:app", "--port", "8000"],
+        [PYTHON, "-u", "-m", "uvicorn", "app.main:app",
+         "--host", SERVER_HOST, "--port", str(SERVER_PORT)],
         cwd=str(PROJECT_DIR),
         stdout=server_log_fh,
         stderr=subprocess.STDOUT,
+        env=child_env,
     )
     # Lưu file handle để đóng sau
     proc._log_fh = server_log_fh  # type: ignore[attr-defined]
 
-    # Đợi server thực sự lắng nghe trên port 8000 (thay vì sleep cố định)
-    if not wait_for_port(8000, timeout=15):
-        print("  [ERROR] Server không lắng nghe port 8000 sau 15s!")
-        if proc.poll() is not None:
-            server_log_fh.close()
-            print(f"  Log: {server_log.read_text()[-500:]}")
-        else:
-            proc.kill()
-            server_log_fh.close()
+    ready, reason = wait_for_server(
+        proc, SERVER_PORT, SERVER_HOST, SERVER_START_TIMEOUT
+    )
+    if not ready:
+        print(f"  [ERROR] Server không sẵn sàng: {reason}")
+        stop_server(proc)
+        print("\n  ----- logs/server_output.log -----")
+        print(server_log_tail(server_log))
+        print("  ----------------------------------")
         return None
 
     if proc.poll() is not None:
         print("  [ERROR] Server không khởi động được!")
         server_log_fh.close()
-        print(f"  Log: {server_log.read_text()[-500:]}")
+        print(server_log_tail(server_log))
         return None
     print(f"  Server đang chạy (PID={proc.pid})")
     return proc
@@ -143,6 +190,11 @@ def stop_server(proc):
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
         print("  Server đã dừng.")
     # Đóng file handle log nếu có
     if proc and hasattr(proc, '_log_fh'):
@@ -151,8 +203,10 @@ def stop_server(proc):
         except Exception:
             pass
     # Đợi port 8000 thật sự được giải phóng trước khi tiếp tục
-    if not wait_for_port_free(8000, timeout=10):
-        print("  ⚠️  Port 8000 vẫn bị chiếm sau khi stop!")
+    if not wait_for_port_free(SERVER_PORT, SERVER_HOST, timeout=15):
+        print(f"  [ERROR] Port {SERVER_PORT} vẫn bị chiếm sau khi stop!")
+        return False
+    return True
 
 
 def clean_logs():
@@ -180,13 +234,53 @@ def rename_raw_log(new_name):
     raw = LOG_DIR / "raw_requests.jsonl"
     target = LOG_DIR / new_name
     if raw.exists():
+        count = sum(1 for line in open(raw, encoding="utf-8") if line.strip())
+        if not count:
+            print(f"  [ERROR] {raw.name} không có request; giữ nguyên log để điều tra")
+            return 0
+        if target.exists():
+            backup = target.with_name(f"{target.name}.{time.time_ns()}.bak")
+            target.rename(backup)
+            print(f"  Đã lưu log cũ: {backup.name}")
         shutil.move(str(raw), str(target))  # move thay vì copy+unlink
-        count = sum(1 for line in open(target) if line.strip())
         print(f"  → {target.name}: {count} requests")
         return count
     else:
         print(f"  ⚠️  Không tìm thấy raw_requests.jsonl")
         return 0
+
+
+def preserve_raw_log():
+    """Tránh cộng request của lần chạy cũ vào phase mới."""
+    raw = LOG_DIR / "raw_requests.jsonl"
+    if raw.exists():
+        backup = raw.with_name(f"{raw.name}.{time.time_ns()}.bak")
+        raw.rename(backup)
+        print(f"  Đã lưu log cũ: {backup.name}")
+
+
+def run_collection(cmd, timeout, desc, server, expected_ip_prefix):
+    """Không tiếp tục nếu Locust lỗi hoặc server không nhận request."""
+    if not run(cmd, timeout=timeout, desc=desc):
+        print(f"  [ERROR] {desc} thất bại")
+        return False
+    if server.poll() is not None:
+        print(f"  [ERROR] Server đã thoát trong {desc}")
+        return False
+    raw = LOG_DIR / "raw_requests.jsonl"
+    if not raw.exists() or raw.stat().st_size == 0:
+        print(f"  [ERROR] {desc}: 0 request được ghi nhận")
+        return False
+    import json
+    with open(raw, encoding="utf-8") as f:
+        scenario_count = sum(
+            json.loads(line)["ip"].startswith(expected_ip_prefix)
+            for line in f if line.strip()
+        )
+    if scenario_count == 0:
+        print(f"  [ERROR] {desc}: 0 request từ nguồn {expected_ip_prefix} được ghi nhận")
+        return False
+    return True
 
 
 def phase_1_collect_data():
@@ -197,22 +291,24 @@ def phase_1_collect_data():
 
     # --- 1A: Normal traffic (120s) ---
     print("\n--- 1A: Traffic bình thường (120s, 20 users) ---")
+    preserve_raw_log()
     server = start_server()
     if not server:
         return False
     time.sleep(5)  # đợi vòng lặp nền chạy
 
-    run([PYTHON, "-m", "locust",
+    succeeded = run_collection([PYTHON, "-m", "locust",
          "-f", str(EXP_DIR / "locustfile_normal.py"),
-         "--host=http://localhost:8000",
+         f"--host=http://{SERVER_HOST}:{SERVER_PORT}",
          "-u", "20", "-r", "5",
          "--run-time", "120s", "--headless"],
-        timeout=150, desc="Locust normal")
+        timeout=150, desc="Locust normal", server=server, expected_ip_prefix="203.0.")
 
     time.sleep(3)
     # QUAN TRỌNG: Dừng server TRƯỚC khi rename để giải phóng file handle
-    stop_server(server)
-    rename_raw_log("raw_requests_normal.jsonl")
+    stopped = stop_server(server)
+    if not succeeded or not stopped or not rename_raw_log("raw_requests_normal.jsonl"):
+        return False
 
     # --- 1B: Burst traffic (90s) ---
     print("\n--- 1B: Traffic burst hợp lệ (90s, 150 users) ---")
@@ -221,17 +317,18 @@ def phase_1_collect_data():
         return False
     time.sleep(5)
 
-    run([PYTHON, "-m", "locust",
+    succeeded = run_collection([PYTHON, "-m", "locust",
          "-f", str(EXP_DIR / "locustfile_burst.py"),
-         "--host=http://localhost:8000",
+         f"--host=http://{SERVER_HOST}:{SERVER_PORT}",
          "-u", "150", "-r", "30",
          "--run-time", "90s", "--headless"],
-        timeout=150, desc="Locust burst")
+        timeout=150, desc="Locust burst", server=server, expected_ip_prefix="198.51.")
 
     time.sleep(3)
     # QUAN TRỌNG: Dừng server TRƯỚC khi rename
-    stop_server(server)
-    rename_raw_log("raw_requests_burst.jsonl")
+    stopped = stop_server(server)
+    if not succeeded or not stopped or not rename_raw_log("raw_requests_burst.jsonl"):
+        return False
 
     # --- 1C: Attack suite ---
     print("\n--- 1C: Attack suite (5 kịch bản) ---")
@@ -240,14 +337,13 @@ def phase_1_collect_data():
         return False
     time.sleep(5)
 
-    run([PYTHON, str(EXP_DIR / "run_attack_suite.py")],
+    succeeded = run([PYTHON, str(EXP_DIR / "run_attack_suite.py")],
         timeout=900, desc="Attack suite")
 
     time.sleep(3)
-    stop_server(server)
+    stopped = stop_server(server)
     time.sleep(2)
-
-    return True
+    return succeeded and stopped
 
 
 def phase_2_train():
@@ -256,25 +352,35 @@ def phase_2_train():
     print("GIAI ĐOẠN 2: SINH DATASET + HUẤN LUYỆN")
     print("=" * 70)
 
+    # Xác minh dữ liệu trước khi thay dataset/model cũ.
+    for name in ("normal", "burst"):
+        path = LOG_DIR / f"raw_requests_{name}.jsonl"
+        if not path.exists() or path.stat().st_size == 0:
+            print(f"  [ERROR] Thiếu request thật trong {path.name}; giữ nguyên dataset cũ")
+            return False
+
     # Xóa training data cũ
     clean_data()
 
     # Generate dataset cho normal + burst
-    for name, label in [("normal", "normal"), ("burst", "normal")]:
+    for name, prefix in [("normal", "203.0."), ("burst", "198.51.")]:
         path = LOG_DIR / f"raw_requests_{name}.jsonl"
-        if path.exists():
-            run([PYTHON, "training/generate_dataset.py", str(path), label],
-                desc=f"Generate {name}")
+        if not run([PYTHON, "training/generate_dataset.py", str(path), "normal",
+                    "--ip-prefix", prefix], desc=f"Generate {name}"):
+            return False
 
     # Generate dataset cho attack
     for f in LOG_DIR.glob("raw_requests_attack_*.jsonl"):
-        run([PYTHON, "training/generate_dataset.py", str(f), "attack"],
-            desc=f"Generate {f.stem}")
+        if f.stat().st_size == 0:
+            print(f"  [SKIP] {f.name}: 0 request hoàn chỉnh (ví dụ slowloris)")
+            continue
+        if not run([PYTHON, "training/generate_dataset.py", str(f), "attack"],
+                   desc=f"Generate {f.stem}"):
+            return False
 
     # Train offline
     print("\n--- Huấn luyện mô hình ---")
-    run([PYTHON, "training/train_offline.py"], desc="Train offline")
-    return True
+    return run([PYTHON, "training/train_offline.py"], desc="Train offline")
 
 
 def phase_3_realtime_test():
@@ -309,7 +415,7 @@ def phase_3_realtime_test():
     print("\n--- Normal traffic 30s (đo baseline) ---")
     run([PYTHON, "-m", "locust",
          "-f", str(EXP_DIR / "locustfile_normal.py"),
-         "--host=http://localhost:8000",
+         f"--host=http://{SERVER_HOST}:{SERVER_PORT}",
          "-u", "10", "-r", "5",
          "--run-time", "30s", "--headless"],
         timeout=45, desc="Normal traffic for measurement")
@@ -427,4 +533,11 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "--server-check":
+        print(f"Kiểm tra uvicorn bằng Python: {PYTHON}")
+        checked_server = start_server()
+        if checked_server is None:
+            sys.exit(1)
+        print(f"[OK] Server phản hồi tại http://{SERVER_HOST}:{SERVER_PORT}")
+        sys.exit(0 if stop_server(checked_server) else 1)
     main()

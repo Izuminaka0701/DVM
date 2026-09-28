@@ -1,26 +1,37 @@
 # Bảng 4.2 — So sánh mô hình học máy (Offline Evaluation)
 
-Dataset: 632 cửa sổ (182 attack, 450 normal)
+Dataset: 381 cửa sổ (182 attack, 199 normal)
 
-Đặc trưng: 8 (request_rate, ip_entropy, inter_arrival_mean, inter_arrival_std, http_method_ratio, unique_path_ratio, unique_ip_count, post_ratio)
+**Chỉ số chính:** unseen-scenario out-of-fold; mỗi fold giữ trọn một normal source và một attack source ngoài tập train.
+
+**Kiểm tra phụ:** purged chronological holdout theo từng source; purge 5 window (5 giây).
+
+Train: 264 | Purged: 30 | Test: 87
 
 
-| Mô hình | Accuracy | Precision | Recall | F1-score | ROC-AUC | CV F1 (5-fold) |
-|---------|----------|-----------|--------|----------|---------|----------------|
-| Baseline - Fixed threshold (request_rate) | 0.7595 | 0.5686 | 0.6444 | 0.6042 | — | — |
-| RandomForest | 0.9873 | 0.9574 | 1.0 | 0.9783 | 0.9992 | 0.9732 ± 0.0083 |
-| MLP | 0.981 | 0.9375 | 1.0 | 0.9677 | 0.999 | 0.9633 ± 0.0187 |
-| XGBoost | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | 0.9724 ± 0.0159 |
+| Mô hình | **Unseen-scenario AUC** | Balanced Acc. | F1 | Same-session F1 | Chronological AUC | Walk-forward AUC |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline - Fixed threshold (request_rate) | — | — | — | 0.5926 | — | — |
+| LogisticRegression | 0.8709 | 0.6353 | 0.6447 | 1.0 | 1.0 | 1.0 ± 0.0 |
+| RandomForest | 0.4705 | 0.5 | 0.6465 | 1.0 | 1.0 | 1.0 ± 0.0 |
+| MLP | 0.5581 | 0.5901 | 0.6165 | 1.0 | 1.0 | 1.0 ± 0.0 |
+| XGBoost | 0.6543 | 0.7839 | 0.8089 | 1.0 | 1.0 | 0.9834 ± 0.0156 |
 
 ## Feature Importance
 
 | Đặc trưng | Importance |
-|-----------|------------|
-| unique_path_ratio | 0.4822 |
-| request_rate | 0.4189 |
-| inter_arrival_std | 0.0700 |
-| inter_arrival_mean | 0.0230 |
-| ip_entropy | 0.0059 |
+|---|---:|
+| unique_path_ratio | 1.0000 |
+| request_rate | 0.0000 |
+| ip_entropy | 0.0000 |
+| inter_arrival_mean | 0.0000 |
+| inter_arrival_std | 0.0000 |
 | http_method_ratio | 0.0000 |
 | unique_ip_count | 0.0000 |
 | post_ratio | 0.0000 |
+
+## Giới hạn đánh giá
+
+Model được chọn là **XGBoost**, AUC chính = **0.6543**. AUC same-session cao không được dùng làm kết luận chính vì các window trong một phiên vẫn có phân phối rất giống nhau.
+
+Các window chồng lấn đã được tách bằng purge gap. Tuy nhiên mỗi kịch bản hiện chỉ có một phiên thu thập; cần chạy thêm phiên độc lập và dùng toàn bộ phiên mới làm external test trước khi kết luận khả năng tổng quát hóa.

@@ -14,7 +14,7 @@
 | [locustfile_normal.py](file:///d:/Code/DVM/experiments/locustfile_normal.py) | Thêm `X-Forwarded-For` giả lập IP đa dạng |
 | [locustfile_burst.py](file:///d:/Code/DVM/experiments/locustfile_burst.py) | Thêm `X-Forwarded-For`, giảm 300→150 users (tránh ConnectionAbortedError) |
 | [run_attack_suite.py](file:///d:/Code/DVM/experiments/run_attack_suite.py) | Thêm slowloris, tăng duration, 10s pause, summary table |
-| [train_offline.py](file:///d:/Code/DVM/training/train_offline.py) | **5-fold CV**, ROC-AUC, feature importance, classification_report, auto-save JSON+markdown |
+| [train_offline.py](file:///d:/Code/DVM/training/train_offline.py) | **Purged split + unseen-scenario OOF**, ROC-AUC, feature importance, classification_report, auto-save JSON+markdown |
 | [benchmark_latency.py](file:///d:/Code/DVM/experiments/benchmark_latency.py) | **Auto PID**, CLI args, JSON report, markdown table cho 4.3 |
 | [plot_results.py](file:///d:/Code/DVM/experiments/plot_results.py) | **7 biểu đồ**: latency, resources, detection delay, timeline, confusion matrix, feature importance, ROC |
 | [run_full_experiment.py](file:///d:/Code/DVM/experiments/run_full_experiment.py) | **[MỚI]** Script master tự động toàn bộ pipeline |
@@ -46,7 +46,7 @@ python experiments\run_full_experiment.py
 
 Script sẽ tự động chạy toàn bộ 4 giai đoạn (~15-20 phút):
 1. Thu dữ liệu: normal 120s + burst 90s + 5 attack scenarios
-2. Sinh dataset + train model (5-fold CV)
+2. Sinh dataset + train model (purged walk-forward + unseen-scenario OOF)
 3. Đo hiệu năng real-time
 4. Sinh 7 biểu đồ
 
@@ -105,8 +105,8 @@ python experiments\run_attack_suite.py
 REM Xóa CSV cũ nếu có
 del data\training_data.csv 2>nul
 
-python training\generate_dataset.py logs\raw_requests_normal.jsonl normal
-python training\generate_dataset.py logs\raw_requests_burst.jsonl normal
+python training\generate_dataset.py logs\raw_requests_normal.jsonl normal --ip-prefix 203.0.
+python training\generate_dataset.py logs\raw_requests_burst.jsonl normal --ip-prefix 198.51.
 python training\generate_dataset.py logs\raw_requests_attack_get_flood_low.jsonl attack
 python training\generate_dataset.py logs\raw_requests_attack_get_flood_high.jsonl attack
 python training\generate_dataset.py logs\raw_requests_attack_slow_post.jsonl attack
@@ -164,7 +164,7 @@ streamlit run dashboard\dashboard.py
 | Mục luận văn | File kết quả | Nội dung |
 |-------------|-------------|----------|
 | **4.1** Thiết lập môi trường | README.md | Cấu hình server, locust, attack scripts |
-| **4.2** Đánh giá offline | `results/table_4_2.md` | Bảng Accuracy/Precision/Recall/F1/ROC-AUC + 5-fold CV |
+| **4.2** Đánh giá offline | `results/table_4_2.md` | AUC unseen-scenario (chính) + purged same-session (phụ) |
 | **4.2** Feature importance | `figures/fig_4_2_feature_importance.png` | Đặc trưng nào đóng góp nhiều nhất |
 | **4.2** Confusion matrix | `figures/fig_4_2_confusion_matrix.png` | Ma trận nhầm lẫn |
 | **4.2** ROC curve | `figures/fig_4_2_roc_curve.png` | Đường cong ROC |

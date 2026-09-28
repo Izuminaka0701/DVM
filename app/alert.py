@@ -35,12 +35,13 @@ class AlertManager:
             self._consecutive = 0
 
         triggered = self._consecutive >= self.debounce_windows
+        alert_ts = None
         if triggered:
-            self._trigger_alert(prob, top_ip)
+            alert_ts = self._trigger_alert(prob, top_ip)
             self._consecutive = 0  # reset sau khi đã cảnh báo, tránh spam liên tục
 
         self._expire_blocks()
-        return triggered, top_ip
+        return triggered, top_ip, alert_ts
 
     def _trigger_alert(self, prob: float, top_ip: str):
         record = {"ts": time.time(), "probability": prob, "blocked_ip": top_ip}
@@ -48,6 +49,7 @@ class AlertManager:
             f.write(json.dumps(record) + "\n")
         if top_ip:
             self._block_ip(top_ip)
+        return record["ts"]
 
     def _block_ip(self, ip: str):
         self._blocked[ip] = time.time() + self.block_duration_s

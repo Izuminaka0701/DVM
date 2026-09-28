@@ -236,7 +236,9 @@ def plot_confusion_matrix():
     best_name = data.get("best_model")
     for r in data.get("results", []):
         if r["name"] == best_name and "confusion_matrix" in r:
-            cm = np.array(r["confusion_matrix"])
+            scenario = r.get("unseen_scenario", {})
+            cm = np.array(scenario.get("oof_confusion_matrix", r["confusion_matrix"]))
+            suffix = "\nUnseen-scenario OOF" if scenario else ""
             fig, ax = plt.subplots(figsize=(5, 4))
             im = ax.imshow(cm, interpolation='nearest', cmap='Blues')
             ax.figure.colorbar(im, ax=ax)
@@ -244,7 +246,7 @@ def plot_confusion_matrix():
             ax.set(xticks=[0, 1], yticks=[0, 1],
                    xticklabels=classes, yticklabels=classes,
                    ylabel="True label", xlabel="Predicted label",
-                   title=f"4.2 - Confusion Matrix ({best_name})")
+                   title=f"4.2 - Confusion Matrix ({best_name}){suffix}")
 
             # Annotate cells
             for i in range(2):
@@ -273,10 +275,19 @@ def plot_feature_importance():
     fi = data.get("feature_importances", {})
     best_name = data.get("best_model")
     if best_name not in fi:
-        print("  [SKIP] Khong co feature importance cho model tot nhat")
-        return
+        # MLP không có impurity importance. Dùng RandomForest làm model tham
+        # chiếu có thể diễn giải và ghi rõ đây không phải model được chọn.
+        if "RandomForest" in fi:
+            importance_model = "RandomForest"
+            title_note = f"; selected={best_name}"
+        else:
+            print("  [SKIP] Khong co feature importance cho model tot nhat")
+            return
+    else:
+        importance_model = best_name
+        title_note = ""
 
-    importances = fi[best_name]
+    importances = fi[importance_model]
     sorted_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)
     names = [f[0] for f in sorted_features]
     values = [f[1] for f in sorted_features]
@@ -285,7 +296,7 @@ def plot_feature_importance():
     colors = plt.cm.viridis(np.linspace(0.3, 0.9, len(names)))
     bars = ax.barh(names[::-1], values[::-1], color=colors[::-1], edgecolor="white")
     ax.set_xlabel("Importance")
-    ax.set_title(f"4.2 - Feature Importance ({best_name})")
+    ax.set_title(f"4.2 - Feature Importance ({importance_model}{title_note})")
 
     for bar, val in zip(bars, values[::-1]):
         ax.text(bar.get_width() + 0.005, bar.get_y() + bar.get_height()/2,
@@ -298,8 +309,7 @@ def plot_feature_importance():
 
 
 def plot_roc_curve():
-    """4.2 - ROC Curve (giả lập từ kết quả eval nếu có đủ dữ liệu)."""
-    # ROC curve cần raw predictions, ta dùng kết quả từ training
+    """4.2 - ROC Curve từ xác suất unseen-scenario out-of-fold."""
     eval_path = RESULTS_DIR / "offline_evaluation.json"
     if not eval_path.exists():
         print("  [SKIP] Chua co offline_evaluation.json")
@@ -311,20 +321,28 @@ def plot_roc_curve():
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.plot([0, 1], [0, 1], 'k--', alpha=0.5, label="Random (AUC=0.5)")
 
-    for r in data.get("results", []):
-        if r.get("roc_auc") is not None:
-            # Vẽ điểm (1-specificity, sensitivity) = (FPR, TPR) từ confusion matrix
-            cm = np.array(r["confusion_matrix"])
-            if cm.shape == (2, 2):
-                tn, fp, fn, tp = cm.ravel()
-                tpr = tp / (tp + fn) if (tp + fn) > 0 else 0
-                fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
-                ax.plot([0, fpr, 1], [0, tpr, 1], 'o-',
-                       label=f"{r['name']} (AUC={r['roc_auc']})", markersize=8)
+    plotted = False
+    model_results = [r for r in data.get("results", [])
+                     if r.get("unseen_scenario", {}).get("oof_roc_fpr") is not None]
+    styles = [
+        {"linewidth": 5.0, "alpha": 0.35, "linestyle": "-"},
+        {"linewidth": 3.2, "alpha": 0.60, "linestyle": "--"},
+        {"linewidth": 1.6, "alpha": 0.95, "linestyle": ":"},
+    ]
+    for index, r in enumerate(model_results):
+        scenario = r["unseen_scenario"]
+        style = styles[index % len(styles)]
+        ax.plot(scenario["oof_roc_fpr"], scenario["oof_roc_tpr"],
+                label=f"{r['name']} (AUC={scenario['oof_auc']})", **style)
+        plotted = True
+    if not plotted:
+        plt.close(fig)
+        print("  [SKIP] Thiếu điểm ROC unseen-scenario OOF")
+        return
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("4.2 - ROC Curve")
+    ax.set_title("4.2 - ROC Curve (Unseen-scenario OOF)")
     ax.legend(loc="lower right", fontsize=8)
     ax.grid(True, alpha=0.3)
 

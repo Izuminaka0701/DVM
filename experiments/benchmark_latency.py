@@ -119,7 +119,7 @@ def load_metrics_safe():
 
 
 def summarize_latency():
-    """4.3.1 Processing Latency (ms/window) — chi tiết theo các mốc T1-T6."""
+    """4.3.1 Processing Latency (ms/window) — T3 đến hết kiểm tra alert."""
     rows = load_metrics_safe()
     if not rows:
         print("Chưa có metrics.jsonl - hãy chạy app/main.py trước.")
@@ -169,7 +169,7 @@ def summarize_latency():
 
     print("\n--- 4.3.1 Processing latency (ms/window) ---")
     print(f"  N windows: {result['n_windows']}")
-    print(f"  [Tổng T3→T6] Mean : {result['mean_ms']} ms | P95: {result['p95_ms']} ms | Max: {result['max_ms']} ms")
+    print(f"  [T3→check_done] Mean : {result['mean_ms']} ms | P95: {result['p95_ms']} ms | Max: {result['max_ms']} ms")
     if log_lats:
         print(f"  [T1→T2 Log Write]         Mean: {result['log_write_mean_ms']} ms | P95: {result['log_write_p95_ms']} ms")
     if feat_lats:
@@ -177,7 +177,7 @@ def summarize_latency():
     if infer_lats:
         print(f"  [T4→T5 ML Inference]       Mean: {result['inference_mean_ms']} ms | P95: {result['inference_p95_ms']} ms")
     if alert_lats:
-        print(f"  [T5→T6 Alert]              Mean: {result['alert_mean_ms']} ms | P95: {result['alert_p95_ms']} ms")
+        print(f"  [T5→check_done Alert]      Mean: {result['alert_mean_ms']} ms | P95: {result['alert_p95_ms']} ms")
     if e2e_delays:
         print(f"  [T1→T6 End-to-End Delay]   Mean: {result['e2e_delay_mean_s']} s | Max: {result['e2e_delay_max_s']} s")
     return result
@@ -297,7 +297,7 @@ def generate_report():
     ]
     if latency:
         md_lines.extend([
-            "### Tổng Processing (T3→T6)\n",
+            "### Tổng Processing (T3→check_done, mỗi window)\n",
             "| Metric | Value |",
             "|--------|-------|",
             f"| Mean | {latency['mean_ms']} ms |",
@@ -333,7 +333,7 @@ def generate_report():
                 )
             if "alert_mean_ms" in latency:
                 md_lines.append(
-                    f"| T5→T6 | Alert | {latency['alert_mean_ms']} ms | {latency['alert_p95_ms']} ms |"
+                    f"| T5→check_done | Alert check | {latency['alert_mean_ms']} ms | {latency['alert_p95_ms']} ms |"
                 )
             if "e2e_delay_mean_s" in latency:
                 md_lines.append(

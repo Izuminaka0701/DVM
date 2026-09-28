@@ -1,42 +1,42 @@
 {
   "processing_latency": {
-    "n_windows": 155,
-    "mean_ms": 4.751,
-    "median_ms": 4.111,
-    "p95_ms": 8.847,
-    "p99_ms": 13.359,
-    "max_ms": 31.182,
-    "min_ms": 1.382,
-    "std_ms": 3.06,
-    "log_write_mean_ms": 0.1614,
-    "log_write_p95_ms": 0.3264,
-    "feature_extraction_mean_ms": 1.2301,
-    "feature_extraction_p95_ms": 4.576,
-    "inference_mean_ms": 2.8168,
-    "inference_p95_ms": 4.051,
-    "alert_mean_ms": 0.7043,
-    "alert_p95_ms": 3.0618,
-    "e2e_delay_mean_s": 4.6379,
-    "e2e_delay_max_s": 5.0141
+    "n_windows": 158,
+    "mean_ms": 4.548,
+    "median_ms": 3.935,
+    "p95_ms": 9.966,
+    "p99_ms": 23.011,
+    "max_ms": 35.2,
+    "min_ms": 0.008,
+    "std_ms": 4.258,
+    "log_write_mean_ms": 0.2911,
+    "log_write_p95_ms": 0.6537,
+    "feature_extraction_mean_ms": 1.1643,
+    "feature_extraction_p95_ms": 4.2636,
+    "inference_mean_ms": 2.7098,
+    "inference_p95_ms": 4.9935,
+    "alert_mean_ms": 0.6737,
+    "alert_p95_ms": 2.8811,
+    "e2e_delay_mean_s": 4.8958,
+    "e2e_delay_max_s": 5.0114
   },
   "detection_delay": [
     {
       "attack": "get_flood_c200_start",
-      "delay_s": 3.86,
+      "delay_s": 3.06,
       "detected": true
     },
     {
       "attack": "bot_mimicry_start",
-      "delay_s": 7.51,
+      "delay_s": 4.29,
       "detected": true
     }
   ],
   "resource_usage": {
     "n_samples": 120,
-    "cpu_mean": 164.81,
-    "cpu_max": 237.4,
-    "cpu_p95": 231.2,
-    "mem_mean_mb": 294.55,
-    "mem_max_mb": 348.33
+    "cpu_mean": 81.61,
+    "cpu_max": 165.5,
+    "cpu_p95": 159.3,
+    "mem_mean_mb": 300.4,
+    "mem_max_mb": 318.85
   }
 }

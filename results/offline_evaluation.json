@@ -1,7 +1,7 @@
 {
-  "dataset_size": 632,
+  "dataset_size": 381,
   "n_attack": 182,
-  "n_normal": 450,
+  "n_normal": 199,
   "features": [
     "request_rate",
     "ip_entropy",
@@ -12,82 +12,603 @@
     "unique_ip_count",
     "post_ratio"
   ],
-  "train_size": 474,
-  "test_size": 158,
+  "train_size": 264,
+  "purged_size": 30,
+  "test_size": 87,
   "best_model": "XGBoost",
-  "best_f1": 1.0,
+  "primary_evaluation": "unseen-scenario out-of-fold",
+  "best_auc": 0.6543,
+  "best_f1": 0.8089,
+  "best_balanced_accuracy": 0.7839,
+  "same_session_chronological_auc": 1.0,
+  "same_session_walk_forward_auc": 0.9834,
+  "best_selection_score": 0.7839,
+  "evaluation": {
+    "strategy": "purged chronological holdout per source",
+    "test_fraction": 0.3,
+    "purge_windows": 5,
+    "purge_seconds": 5.0,
+    "selection": "best unseen-scenario OOF balanced accuracy",
+    "limitation": "Các source hiện vẫn là một phiên cho mỗi kịch bản; cần phiên độc lập để đo khả năng tổng quát hóa hoàn toàn.",
+    "sources": [
+      {
+        "source": "raw_requests_attack_bot_mimicry",
+        "label": 1,
+        "total": 55,
+        "train": 38,
+        "purged": 5,
+        "test": 12,
+        "train_last_ts": 1790590936.706498,
+        "test_first_ts": 1790590942.706498
+      },
+      {
+        "source": "raw_requests_attack_get_flood_high",
+        "label": 1,
+        "total": 36,
+        "train": 25,
+        "purged": 5,
+        "test": 6,
+        "train_last_ts": 1790590793.229993,
+        "test_first_ts": 1790590799.229993
+      },
+      {
+        "source": "raw_requests_attack_get_flood_low",
+        "label": 1,
+        "total": 36,
+        "train": 25,
+        "purged": 5,
+        "test": 6,
+        "train_last_ts": 1790590737.879562,
+        "test_first_ts": 1790590743.879562
+      },
+      {
+        "source": "raw_requests_attack_slow_post",
+        "label": 1,
+        "total": 55,
+        "train": 38,
+        "purged": 5,
+        "test": 12,
+        "train_last_ts": 1790590861.18179,
+        "test_first_ts": 1790590867.18179
+      },
+      {
+        "source": "raw_requests_burst",
+        "label": 0,
+        "total": 85,
+        "train": 59,
+        "purged": 5,
+        "test": 21,
+        "train_last_ts": 1790590664.8379292,
+        "test_first_ts": 1790590670.8379292
+      },
+      {
+        "source": "raw_requests_normal",
+        "label": 0,
+        "total": 114,
+        "train": 79,
+        "purged": 5,
+        "test": 30,
+        "train_last_ts": 1790590548.4963248,
+        "test_first_ts": 1790590554.4963248
+      }
+    ]
+  },
   "results": [
     {
       "name": "Baseline - Fixed threshold (request_rate)",
-      "accuracy": 0.7595,
-      "precision": 0.5686,
-      "recall": 0.6444,
-      "f1": 0.6042,
+      "accuracy": 0.6207,
+      "precision": 0.5333,
+      "recall": 0.6667,
+      "f1": 0.5926,
       "roc_auc": null,
       "confusion_matrix": [
         [
-          91,
-          22
+          30,
+          21
         ],
         [
-          16,
-          29
+          12,
+          24
         ]
       ]
+    },
+    {
+      "name": "LogisticRegression",
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          51,
+          0
+        ],
+        [
+          0,
+          36
+        ]
+      ],
+      "roc_fpr": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "roc_tpr": [
+        0.0,
+        0.027777777777777776,
+        1.0,
+        1.0
+      ],
+      "roc_thresholds": [
+        null,
+        0.9987744273120999,
+        0.8043516984963605,
+        0.001172747088651212
+      ],
+      "cv_strategy": "3-fold purged walk-forward",
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
+      "cv_f1_scores": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "cv_auc_mean": 1.0,
+      "cv_auc_std": 0.0,
+      "cv_auc_scores": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "unseen_scenario": {
+        "strategy": "leave-one-normal-and-one-attack-source-out",
+        "n_folds": 8,
+        "folds": [
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.5641,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 121,
+            "auc": 1.0,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 121,
+            "auc": 1.0,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 169,
+            "auc": 1.0,
+            "f1": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 150,
+            "auc": 1.0,
+            "f1": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 150,
+            "auc": 1.0,
+            "f1": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 169,
+            "auc": 1.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.5
+          }
+        ],
+        "fold_auc_mean": 0.75,
+        "fold_auc_std": 0.433,
+        "fold_f1_mean": 0.5602,
+        "fold_f1_std": 0.3919,
+        "oof_accuracy": 0.6325,
+        "oof_balanced_accuracy": 0.6353,
+        "oof_f1": 0.6447,
+        "oof_auc": 0.8709,
+        "oof_confusion_matrix": [
+          [
+            114,
+            85
+          ],
+          [
+            55,
+            127
+          ]
+        ],
+        "oof_roc_fpr": [
+          0.0,
+          0.0,
+          0.0,
+          0.4271356783919598,
+          0.4271356783919598,
+          1.0
+        ],
+        "oof_roc_tpr": [
+          0.0,
+          0.005494505494505495,
+          0.6978021978021978,
+          0.6978021978021978,
+          1.0,
+          1.0
+        ]
+      }
     },
     {
       "name": "RandomForest",
-      "accuracy": 0.9873,
-      "precision": 0.9574,
+      "accuracy": 1.0,
+      "precision": 1.0,
       "recall": 1.0,
-      "f1": 0.9783,
-      "roc_auc": 0.9992,
+      "f1": 1.0,
+      "roc_auc": 1.0,
       "confusion_matrix": [
         [
-          111,
-          2
+          51,
+          0
         ],
         [
           0,
-          45
+          36
         ]
       ],
-      "cv_f1_mean": 0.9732,
-      "cv_f1_std": 0.0083,
+      "roc_fpr": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "roc_tpr": [
+        0.0,
+        1.0,
+        1.0
+      ],
+      "roc_thresholds": [
+        null,
+        1.0,
+        0.0
+      ],
+      "cv_strategy": "3-fold purged walk-forward",
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
       "cv_f1_scores": [
-        0.9737,
-        0.9737,
-        0.9722,
-        0.9863,
-        0.96
-      ]
+        1.0,
+        1.0,
+        1.0
+      ],
+      "cv_auc_mean": 1.0,
+      "cv_auc_std": 0.0,
+      "cv_auc_scores": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "unseen_scenario": {
+        "strategy": "leave-one-normal-and-one-attack-source-out",
+        "n_folds": 8,
+        "folds": [
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.5641,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 121,
+            "auc": 1.0,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 121,
+            "auc": 0.0,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 140,
+            "auc": 0.5059,
+            "f1": 0.5641,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 169,
+            "auc": 1.0,
+            "f1": 0.4911,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 150,
+            "auc": 0.0,
+            "f1": 0.3871,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 150,
+            "auc": 1.0,
+            "f1": 0.3871,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 169,
+            "auc": 0.4035,
+            "f1": 0.2302,
+            "balanced_accuracy": 0.3472
+          }
+        ],
+        "fold_auc_mean": 0.4887,
+        "fold_auc_std": 0.4342,
+        "fold_f1_mean": 0.4426,
+        "fold_f1_std": 0.1023,
+        "oof_accuracy": 0.4777,
+        "oof_balanced_accuracy": 0.5,
+        "oof_f1": 0.6465,
+        "oof_auc": 0.4705,
+        "oof_confusion_matrix": [
+          [
+            0,
+            199
+          ],
+          [
+            0,
+            182
+          ]
+        ],
+        "oof_roc_fpr": [
+          0.0,
+          0.41708542713567837,
+          0.4221105527638191,
+          0.4221105527638191,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.7688442211055276,
+          0.7688442211055276,
+          0.7688442211055276,
+          0.7688442211055276,
+          0.7688442211055276,
+          0.7839195979899497,
+          0.8140703517587939,
+          1.0
+        ],
+        "oof_roc_tpr": [
+          0.0,
+          0.0,
+          0.0,
+          0.17582417582417584,
+          0.17582417582417584,
+          0.1978021978021978,
+          0.5,
+          0.521978021978022,
+          0.532967032967033,
+          0.5384615384615384,
+          0.6978021978021978,
+          0.6978021978021978,
+          0.7857142857142857,
+          0.8076923076923077,
+          0.9615384615384616,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
     },
     {
       "name": "MLP",
-      "accuracy": 0.981,
-      "precision": 0.9375,
+      "accuracy": 1.0,
+      "precision": 1.0,
       "recall": 1.0,
-      "f1": 0.9677,
-      "roc_auc": 0.999,
+      "f1": 1.0,
+      "roc_auc": 1.0,
       "confusion_matrix": [
         [
-          110,
-          3
+          51,
+          0
         ],
         [
           0,
-          45
+          36
         ]
       ],
-      "cv_f1_mean": 0.9633,
-      "cv_f1_std": 0.0187,
+      "roc_fpr": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "roc_tpr": [
+        0.0,
+        0.027777777777777776,
+        1.0,
+        1.0
+      ],
+      "roc_thresholds": [
+        null,
+        0.9987325963027277,
+        0.9769225901702396,
+        5.286830369678464e-05
+      ],
+      "cv_strategy": "3-fold purged walk-forward",
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
       "cv_f1_scores": [
-        0.9737,
-        0.9487,
-        0.9863,
-        0.973,
-        0.9351
-      ]
+        1.0,
+        1.0,
+        1.0
+      ],
+      "cv_auc_mean": 1.0,
+      "cv_auc_std": 0.0,
+      "cv_auc_scores": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "unseen_scenario": {
+        "strategy": "leave-one-normal-and-one-attack-source-out",
+        "n_folds": 8,
+        "folds": [
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.5641,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 121,
+            "auc": 1.0,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 121,
+            "auc": 0.3157,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.2059
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 169,
+            "auc": 0.936,
+            "f1": 0.9016,
+            "balanced_accuracy": 0.9474
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 150,
+            "auc": 0.4206,
+            "f1": 0.4211,
+            "balanced_accuracy": 0.5658
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 150,
+            "auc": 0.8882,
+            "f1": 0.6667,
+            "balanced_accuracy": 0.8421
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 169,
+            "auc": 0.8035,
+            "f1": 0.0,
+            "balanced_accuracy": 0.4868
+          }
+        ],
+        "fold_auc_mean": 0.5455,
+        "fold_auc_std": 0.3884,
+        "fold_f1_mean": 0.4338,
+        "fold_f1_std": 0.2889,
+        "oof_accuracy": 0.5853,
+        "oof_balanced_accuracy": 0.5901,
+        "oof_f1": 0.6165,
+        "oof_auc": 0.5581,
+        "oof_confusion_matrix": [
+          [
+            96,
+            103
+          ],
+          [
+            55,
+            127
+          ]
+        ],
+        "oof_roc_fpr": [
+          0.0,
+          0.005025125628140704,
+          0.005025125628140704,
+          0.010050251256281407,
+          0.010050251256281407,
+          0.01507537688442211,
+          0.01507537688442211,
+          0.4472361809045226,
+          0.4472361809045226,
+          1.0,
+          1.0
+        ],
+        "oof_roc_tpr": [
+          0.0,
+          0.0,
+          0.04945054945054945,
+          0.04945054945054945,
+          0.22527472527472528,
+          0.22527472527472528,
+          0.3956043956043956,
+          0.3956043956043956,
+          0.6978021978021978,
+          0.6978021978021978,
+          1.0
+        ]
+      }
     },
     {
       "name": "XGBoost",
@@ -98,43 +619,170 @@
       "roc_auc": 1.0,
       "confusion_matrix": [
         [
-          113,
+          51,
           0
         ],
         [
           0,
-          45
+          36
         ]
       ],
-      "cv_f1_mean": 0.9724,
-      "cv_f1_std": 0.0159,
+      "roc_fpr": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "roc_tpr": [
+        0.0,
+        1.0,
+        1.0
+      ],
+      "roc_thresholds": [
+        null,
+        0.9924742579460144,
+        0.006871319375932217
+      ],
+      "cv_strategy": "3-fold purged walk-forward",
+      "cv_f1_mean": 0.9741,
+      "cv_f1_std": 0.0245,
       "cv_f1_scores": [
-        0.9737,
-        0.9867,
-        0.9859,
-        0.9429,
-        0.973
-      ]
+        0.9412,
+        0.9811,
+        1.0
+      ],
+      "cv_auc_mean": 0.9834,
+      "cv_auc_std": 0.0156,
+      "cv_auc_scores": [
+        0.9625,
+        0.9878,
+        1.0
+      ],
+      "unseen_scenario": {
+        "strategy": "leave-one-normal-and-one-attack-source-out",
+        "n_folds": 8,
+        "folds": [
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 140,
+            "auc": 0.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.0
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 121,
+            "auc": 0.5,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 121,
+            "auc": 0.5,
+            "f1": 0.4586,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_burst",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 140,
+            "auc": 0.5,
+            "f1": 0.5641,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_bot_mimicry",
+            "test_size": 169,
+            "auc": 1.0,
+            "f1": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_high",
+            "test_size": 150,
+            "auc": 0.0,
+            "f1": 0.0,
+            "balanced_accuracy": 0.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_get_flood_low",
+            "test_size": 150,
+            "auc": 1.0,
+            "f1": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "normal_source": "raw_requests_normal",
+            "attack_source": "raw_requests_attack_slow_post",
+            "test_size": 169,
+            "auc": 0.4956,
+            "f1": 0.0,
+            "balanced_accuracy": 0.4956
+          }
+        ],
+        "fold_auc_mean": 0.4995,
+        "fold_auc_std": 0.3536,
+        "fold_f1_mean": 0.4352,
+        "fold_f1_std": 0.3911,
+        "oof_accuracy": 0.7743,
+        "oof_balanced_accuracy": 0.7839,
+        "oof_f1": 0.8089,
+        "oof_auc": 0.6543,
+        "oof_confusion_matrix": [
+          [
+            113,
+            86
+          ],
+          [
+            0,
+            182
+          ]
+        ],
+        "oof_roc_fpr": [
+          0.0,
+          0.0,
+          0.4271356783919598,
+          0.4271356783919598,
+          0.4321608040201005,
+          0.4321608040201005,
+          1.0
+        ],
+        "oof_roc_tpr": [
+          0.0,
+          0.1978021978021978,
+          0.1978021978021978,
+          0.3956043956043956,
+          0.3956043956043956,
+          1.0,
+          1.0
+        ]
+      }
     }
   ],
   "feature_importances": {
     "RandomForest": {
-      "request_rate": 0.18016872460940622,
-      "ip_entropy": 0.10207624286830366,
-      "inter_arrival_mean": 0.17776811161629874,
-      "inter_arrival_std": 0.10645223192969297,
-      "http_method_ratio": 0.13334574830156148,
-      "unique_path_ratio": 0.16879172929644018,
-      "unique_ip_count": 0.046987498309685446,
-      "post_ratio": 0.08440971306861145
+      "request_rate": 0.06468755138541264,
+      "ip_entropy": 0.09687090944167738,
+      "inter_arrival_mean": 0.05199582426432864,
+      "inter_arrival_std": 0.0234212837802062,
+      "http_method_ratio": 0.14386791863139234,
+      "unique_path_ratio": 0.3737144771876845,
+      "unique_ip_count": 0.07534159721212556,
+      "post_ratio": 0.17010043809717282
     },
     "XGBoost": {
-      "request_rate": 0.4189249277114868,
-      "ip_entropy": 0.005880503449589014,
-      "inter_arrival_mean": 0.023005541414022446,
-      "inter_arrival_std": 0.06997670978307724,
+      "request_rate": 0.0,
+      "ip_entropy": 0.0,
+      "inter_arrival_mean": 0.0,
+      "inter_arrival_std": 0.0,
       "http_method_ratio": 0.0,
-      "unique_path_ratio": 0.48221224546432495,
+      "unique_path_ratio": 1.0,
       "unique_ip_count": 0.0,
       "post_ratio": 0.0
     }

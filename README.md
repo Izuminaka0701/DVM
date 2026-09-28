@@ -12,7 +12,7 @@ ddos_demo/
 │   └── alert.py                 3.5 - cảnh báo + debounce + block IP
 ├── training/
 │   ├── generate_dataset.py      3.4.1 - tái tạo cửa sổ offline từ log thô
-│   ├── train_offline.py         3.4.1, 4.2 - huấn luyện + 5-fold CV + so sánh model
+│   ├── train_offline.py         3.4.1, 4.2 - purged split + unseen-scenario evaluation
 │   └── baseline_fixed_threshold.py   4.2, 4.4 - baseline không dùng ML
 ├── dashboard/dashboard.py       3.6 - giao diện giám sát (xử lý log hỏng)
 ├── experiments/
@@ -45,10 +45,28 @@ pip install -r requirements.txt
 python experiments/run_full_experiment.py
 ```
 
+Nếu server không khởi động, script sẽ dừng ngay khi process uvicorn thoát và in
+phần cuối `logs/server_output.log` ra console. Script chờ tối đa 60 giây và bind
+rõ `127.0.0.1:8000`. Model cũ không tương thích không còn làm hỏng Giai đoạn 1:
+hệ thống tạm dùng ngưỡng `request_rate`, sau đó Giai đoạn 2 sẽ train lại model.
+
+Kiểm tra nhanh môi trường trước khi chạy toàn bộ:
+
+```bash
+python -c "import fastapi, uvicorn, joblib, sklearn; print('Dependencies OK')"
+python experiments/run_full_experiment.py --server-check
+```
+
+Nếu lệnh đầu lỗi, cài dependency bằng đúng Python đang chạy script:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
 Script sẽ tự động:
 1. Khởi động server, thu dữ liệu normal (120s) + burst (90s)
 2. Chạy 5 kịch bản tấn công (GET flood low/high, slow POST, bot mimicry, slowloris)
-3. Sinh dataset + train model (5-fold CV)
+3. Sinh dataset + train model (purged walk-forward + unseen-scenario OOF)
 4. Đo hiệu năng real-time (latency, detection delay, CPU/RAM)
 5. Sinh 7 biểu đồ vào `figures/`
 6. Sinh bảng markdown vào `results/` (copy vào luận văn)
@@ -100,8 +118,8 @@ python experiments/run_attack_suite.py
 ### Bước 3 - Sinh dataset (3.4.1)
 
 ```bash
-python training/generate_dataset.py logs/raw_requests_normal.jsonl normal
-python training/generate_dataset.py logs/raw_requests_burst.jsonl normal
+python training/generate_dataset.py logs/raw_requests_normal.jsonl normal --ip-prefix 203.0.
+python training/generate_dataset.py logs/raw_requests_burst.jsonl normal --ip-prefix 198.51.
 python training/generate_dataset.py logs/raw_requests_attack_get_flood_low.jsonl attack
 python training/generate_dataset.py logs/raw_requests_attack_get_flood_high.jsonl attack
 python training/generate_dataset.py logs/raw_requests_attack_slow_post.jsonl attack
@@ -116,9 +134,13 @@ python training/train_offline.py
 ```
 
 Kết quả:
-- Console: bảng metrics + 5-fold CV + feature importance
+- Console: chronological metrics + purged walk-forward + unseen-scenario metrics
 - `results/offline_evaluation.json`: kết quả chi tiết
 - `results/table_4_2.md`: bảng markdown cho luận văn
+
+Chỉ số AUC chính để báo cáo là `best_auc` / `unseen_scenario.oof_auc`.
+`same_session_chronological_auc` chỉ là kiểm tra phụ: chỉ số này có thể rất cao
+vì train và test vẫn đến từ cùng một phiên/kịch bản, dù đã có purge gap.
 
 ### Bước 5 - Dashboard (3.6)
 
@@ -173,18 +195,24 @@ T4: Feature extraction hoàn tất                  (common/features.py - extrac
 ↓
 T5: ML inference hoàn tất                        (app/inference.py - predict_proba)
 ↓
-T6: Alert được sinh ra                           (app/alert.py - check)
+T6: Alert được sinh ra (chỉ khi triggered=true)   (app/alert.py - _trigger_alert)
 ```
 
 Từ đó Chương 4 có thể đo:
 
 - **Feature Extraction Latency** = T4 – T3
 - **Inference Latency** = T5 – T4
-- **End-to-End Detection Delay** = T6 – T1 hoặc theo định nghĩa thống nhất của nhóm
-- **Processing overhead** của collector/inference đối với Web Server = T6 – T3
+- **End-to-End Detection Delay** = T6 – T1 của request sớm nhất trong window phát cảnh báo (chỉ có khi alert)
+- **Processing latency** của chu kỳ = `check_done` – T3; `alert_latency_ms` = `check_done` – T5
 
-Các mốc thời gian được ghi tự động vào `logs/metrics.jsonl` mỗi chu kỳ cửa sổ trượt.
+Các mốc thời gian được ghi tự động vào `logs/metrics.jsonl` mỗi chu kỳ cửa sổ trượt. T1 và T2 của cùng request sớm nhất; T6 là `null` trong chu kỳ không phát cảnh báo. Các log đo hiệu năng có sẵn trong ZIP thuộc lần chạy trước và không được tính lại hồi tố.
 Chạy `python experiments/benchmark_latency.py --report` để xem báo cáo chi tiết.
+
+## Dữ liệu được khôi phục từ log hiện có
+
+Log request gốc được giữ nguyên. Lần xuất dữ liệu này có 7.079 request trong `raw_requests_normal.jsonl`, nhưng chỉ 546 request có IP giả lập `203.0.*` đúng với `locustfile_normal.py`; 6.533 request `10.0.*` trong cùng file bị loại khỏi **dataset** vì nguồn không khớp. File `raw_requests_burst.jsonl` chứa 14.202 request `198.51.*` đúng kịch bản flash sale. Tạo lại dataset từ log thực cho 120 window normal, 83 window burst và 182 window attack, không có window rỗng. Số request thu thập trong tất cả log không đổi. `raw_requests_attack_slowloris.jsonl` không chứa HTTP request hoàn chỉnh nên không sinh window.
+
+Các window trượt lân cận dùng chung nhiều request, do đó chỉ số train/test chia ngẫu nhiên có thể cao hơn hiệu quả trên một phiên flash sale độc lập. Các file `results/benchmark_report.json`, `results/table_4_3.md`, `logs/metrics.jsonl` và biểu đồ 4.3 là số đo lịch sử, chưa đo lại với model mới; chạy lại phase đo hiệu năng để có số đo mới.
 
 ## Hạn chế (4.5)
 

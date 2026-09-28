@@ -18,7 +18,8 @@ Các mốc thời gian (Chương 4 - Đánh giá hiệu năng):
   => Feature Extraction Latency  = T4 – T3
   => Inference Latency           = T5 – T4
   => End-to-End Detection Delay  = T6 – T1
-  => Processing Overhead         = T6 – T3 (collector/inference đối với Web Server)
+  => Processing Time             = check_done – T3 (mỗi chu kỳ)
+  T6 chỉ tồn tại khi cảnh báo thật sự được tạo.
 
 Chạy từ thư mục gốc ddos_demo/:
     uvicorn app.main:app --reload --port 8000
@@ -96,57 +97,64 @@ async def feature_extraction_loop():
         t4 = time.perf_counter()
         t4_wall = time.time()
 
-        prob = engine.predict_proba(features)  # 3.4.2 online inference
+        # Không gửi window rỗng vào model. Dataset cố ý không học mẫu rỗng,
+        # vì vậy suy luận trên vector idle là out-of-distribution và từng gây
+        # xác suất attack cao dù request_rate = 0.
+        idle_window = not window_requests
+        prob = 0.0 if idle_window else engine.predict_proba(features)
 
         # ---- T5: ML inference hoàn tất ----
         t5 = time.perf_counter()
         t5_wall = time.time()
 
-        triggered, top_ip = alerter.check(prob, window_requests)  # 3.5
+        triggered, top_ip, alert_ts = alerter.check(prob, window_requests)  # 3.5
 
-        # ---- T6: Alert được sinh ra ----
-        t6 = time.perf_counter()
-        t6_wall = time.time()
+        # Kết thúc xử lý chu kỳ. T6 lấy từ timestamp alert thật (nếu có).
+        check_done = time.perf_counter()
+        check_done_wall = time.time()
 
         # Tính latency chi tiết theo các mốc T1-T6
         feature_extraction_latency_ms = (t4 - t3) * 1000   # T4 - T3
         inference_latency_ms = (t5 - t4) * 1000             # T5 - T4
-        alert_latency_ms = (t6 - t5) * 1000                 # T6 - T5
-        processing_latency_ms = (t6 - t3) * 1000            # T6 - T3 (tổng processing)
+        alert_latency_ms = (check_done - t5) * 1000          # toàn bộ alert check
+        processing_latency_ms = (check_done - t3) * 1000    # tổng thời gian xử lý chu kỳ
 
         # T1: lấy từ request sớm nhất trong window (nếu có)
         # T2: lấy từ request sớm nhất có T2_logged (log timestamp)
-        # End-to-End Detection Delay = T6 - T1
+        # T1/T2 của cùng request đầu tiên trong cửa sổ. Detection delay chỉ đo khi alert.
         earliest_t1 = None
         earliest_t2 = None
         log_write_latency_ms = None
         e2e_detection_delay_s = None
         if window_requests:
-            earliest_t1 = min(r["ts"] for r in window_requests)
-            e2e_detection_delay_s = round(t6_wall - earliest_t1, 4)
-            # T2: timestamp ghi log tương ứng với request sớm nhất
-            t2_values = [r["T2_logged"] for r in window_requests if "T2_logged" in r]
-            if t2_values:
-                earliest_t2 = min(t2_values)
+            first_request = min(window_requests, key=lambda r: r["ts"])
+            earliest_t1 = first_request["ts"]
+            if alert_ts is not None:
+                e2e_detection_delay_s = round(alert_ts - earliest_t1, 4)
+            if "T2_logged" in first_request:
+                earliest_t2 = first_request["T2_logged"]
                 log_write_latency_ms = round((earliest_t2 - earliest_t1) * 1000, 4)
 
         record = {
             "ts": now,
             **features,
             "attack_probability": prob,
+            "idle_window_skipped": idle_window,
             # --- 6 mốc thời gian tuyệt đối (Chương 4) ---
             "T1_earliest_request": earliest_t1,
             "T2_log_written": earliest_t2,
             "T3_window_ready": t3_wall,
             "T4_feature_done": t4_wall,
             "T5_inference_done": t5_wall,
-            "T6_alert_done": t6_wall,
+            "T6_alert_generated": alert_ts,
+            "T6_alert_done": alert_ts,  # tên cũ cho dashboard/báo cáo hiện có
+            "check_done": check_done_wall,
             # --- Latency giữa các mốc (ms) ---
             "log_write_latency_ms": log_write_latency_ms,               # T2 - T1
             "feature_extraction_latency_ms": round(feature_extraction_latency_ms, 4),  # T4 - T3
             "inference_latency_ms": round(inference_latency_ms, 4),     # T5 - T4
-            "alert_latency_ms": round(alert_latency_ms, 4),             # T6 - T5
-            "processing_latency_ms": round(processing_latency_ms, 4),   # T6 - T3
+            "alert_latency_ms": round(alert_latency_ms, 4),             # T5 -> check_done
+            "processing_latency_ms": round(processing_latency_ms, 4),   # T3 -> check_done
             "e2e_detection_delay_s": e2e_detection_delay_s,             # T6 - T1
             "alert_triggered": triggered,
             "top_ip": top_ip,
